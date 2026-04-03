@@ -3,8 +3,8 @@
 # Licensed under the MIT License
 
 import numpy as np
-import ann.activation_functions as AF
-import ann.initiations as In
+from . import activation_functions as AF
+from . import initiations as In
 
 # Dense Layer class
 class DenseLayer:
