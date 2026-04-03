@@ -4,15 +4,15 @@ A from-scratch implementation of an Artificial Neural Network (ANN) with multi-l
 
 ## Features
 
-- 🧠 **Pure NumPy Implementation**: Built from scratch with NumPy for transparency and educational value
-- 🔧 **Flexible Architecture**: Support for custom layer configurations, activation functions, and initialization strategies
-- ⚡ **Dual Workflows**:
+- **Pure NumPy Implementation**: Built from scratch with NumPy for transparency and educational value
+- **Flexible Architecture**: Support for custom layer configurations, activation functions, and initialization strategies
+- **Dual Workflows**:
   - **Manual Mode**: Fine-grained control over every step
   - **Automatic Mode**: One-line training with preprocessing, scaling, and evaluation
-- 📊 **Rich Visualization**: Real-time training plots, loss tracking, and prediction comparisons
-- 🎯 **Multiple Activation Functions**: ReLU, Sigmoid, Tanh, Linear, and more
-- 📈 **Advanced Training Options**: Batch training, configurable learning rates, custom loss functions
-- 🔄 **Multiple Initialization Strategies**: He, Xavier, and random initialization
+- **Rich Visualization**: Real-time training plots, loss tracking, and prediction comparisons
+- **Multiple Activation Functions**: ReLU, Sigmoid, Tanh, Linear, and Softmax
+- **Advanced Training Options**: Batch training, configurable learning rates
+- **Multiple Initialization Strategies**: He, Xavier, and random initialization
 
 ## Installation
 
