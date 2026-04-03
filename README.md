@@ -2,6 +2,8 @@
 
 A from-scratch implementation of an Artificial Neural Network (ANN) with multi-layer perceptron architecture. SaANN provides both manual and automatic workflows for building, training, and evaluating neural networks without relying on high-level frameworks like TensorFlow or PyTorch.
 
+Made as a personal project for learning purposes.
+
 ## Features
 
 - **Pure NumPy Implementation**: Built from scratch with NumPy for transparency and educational value
@@ -215,7 +217,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Author
 
-**ale99bra** - [GitHub Profile](https://github.com/ale99bra)
+**Alessio Branda** - [GitHub Profile](https://github.com/ale99bra)
 
 ## Acknowledgments
 
@@ -231,5 +233,3 @@ If you encounter any issues or have questions:
 1. Check the `examples/` directory for usage patterns
 2. Review the inline code documentation
 3. Open an issue on GitHub with a detailed description
-
-Happy learning! 🚀
