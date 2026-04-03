@@ -7,7 +7,7 @@ setup(
     name="saann",
     version="0.1.0",
     author="Alessio Branda",
-    description="Self-Automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture",
+    description="Self-automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ale99bra/SaANN.git",
