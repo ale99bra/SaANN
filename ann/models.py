@@ -3,10 +3,10 @@
 # Licensed under the MIT License
 
 import numpy as np
-from ANN.losses import MSE, MSE_der
-from ANN.gradients import SGD
-from ANN.layers import MLP
-from ANN.processing import Scaling, train_test_split
+from ann.losses import MSE, MSE_der
+from ann.gradients import SGD
+from ann.layers import MLP
+from ann.processing import Scaling, train_test_split
 import warnings
 import matplotlib.pyplot as plt
 
