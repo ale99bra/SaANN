@@ -10,7 +10,7 @@ setup(
     description="Self-Automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ale99bra/saann",
+    url="https://github.com/ale99bra/SaANN.git",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
