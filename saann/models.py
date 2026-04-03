@@ -195,7 +195,7 @@ class SequentialModel:
     
     def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
         """
-        Performs the *contruction*, *fit* and *prediction* based on the parameters given.\n
+        Performs the *construction*, *fitting* and *prediction* based on the parameters given.\n
         Parameters
         ---------
         :param X: Features array.\n
