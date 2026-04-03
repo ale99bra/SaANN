@@ -1,0 +1,41 @@
+from setuptools import setup, find_packages
+
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+setup(
+    name="saann",
+    version="0.1.0",
+    author="Alessio Branda",
+    description="Self-Automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/ale99bra/saann",
+    packages=find_packages(),
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Education",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    ],
+    python_requires=">=3.8",
+    install_requires=[
+        "numpy==2.4.1",
+        "pandas==3.0.2",
+        "matplotlib==3.10.8",
+    ],
+    extras_require={
+        "dev": [
+            "pytest>=6.0",
+            "black>=21.0",
+            "flake8>=3.9",
+        ],
+    },
+)
