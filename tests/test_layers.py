@@ -16,10 +16,10 @@ class TestLayer(unittest.TestCase):
     def test_layer_initialization(self):
         """Test that layer initializes correctly"""
         layer = DenseLayer(
-            input_size=self.input_size,
-            output_size=self.output_size,
-            activation="relu",
-            initialization="he"
+            num_inputs=self.input_size,
+            num_neurons=self.output_size,
+            activation_function="relu",
+            init_function="he"
         )
         
         self.assertIsNotNone(layer)
@@ -29,10 +29,10 @@ class TestLayer(unittest.TestCase):
     def test_layer_forward_pass(self):
         """Test layer forward pass"""
         layer = DenseLayer(
-            input_size=self.input_size,
-            output_size=self.output_size,
-            activation="relu",
-            initialization="he"
+            num_inputs=self.input_size,
+            num_neurons=self.output_size,
+            activation_function="relu",
+            init_function="he"
         )
         
         X = np.random.randn(self.batch_size, self.input_size)
@@ -44,10 +44,10 @@ class TestLayer(unittest.TestCase):
     def test_layer_backward_pass(self):
         """Test layer backward pass"""
         layer = DenseLayer(
-            input_size=self.input_size,
-            output_size=self.output_size,
-            activation="relu",
-            initialization="he"
+            num_inputs=self.input_size,
+            num_neurons=self.output_size,
+            activation_function="relu",
+            init_function="he"
         )
         
         X = np.random.randn(self.batch_size, self.input_size)
@@ -66,10 +66,10 @@ class TestLayer(unittest.TestCase):
     def test_layer_weight_shapes(self):
         """Test that layer weights have correct shapes"""
         layer = DenseLayer(
-            input_size=self.input_size,
-            output_size=self.output_size,
-            activation="sigmoid",
-            initialization="xavier"
+            num_inputs=self.input_size,
+            num_neurons=self.output_size,
+            activation_function="sigmoid",
+            init_function="xavier"
         )
         
         self.assertEqual(layer.weights.shape, (self.input_size, self.output_size))
@@ -82,10 +82,11 @@ class TestLayer(unittest.TestCase):
         for activation in activations:
             with self.subTest(activation=activation):
                 layer = DenseLayer(
-                    input_size=self.input_size,
-                    output_size=self.output_size,
-                    activation=activation,
-                    initialization="he"
+                    num_inputs=self.input_size,
+                    num_neurons=self.output_size,
+                    activation_function=activation,
+                    init_function="random",
+                    random_scale=0.01
                 )
                 
                 X = np.random.randn(self.batch_size, self.input_size)
