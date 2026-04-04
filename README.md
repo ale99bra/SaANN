@@ -39,9 +39,9 @@ pip install git+https://github.com/ale99bra/SaANN.git
 ### Requirements
 
 - Python 3.8+
-- NumPy 2.4.1
-- Pandas 3.0.2
-- Matplotlib 3.10.8
+- NumPy >=1.0,<3.0
+- Pandas >=1.0,<4.0
+- Matplotlib >=3.7,<4.0
 
 Install dependencies:
 
