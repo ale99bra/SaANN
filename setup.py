@@ -34,6 +34,7 @@ setup(
     extras_require={
         "dev": [
             "pytest>=6.0",
+            "pytest-cov>=2.12",
             "black>=21.0",
             "flake8>=3.9",
         ],
