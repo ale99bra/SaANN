@@ -27,8 +27,8 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "numpy>=2.0,<3.0",
-        "pandas>=2.0,<4.0",
+        "numpy>=1.0,<3.0",
+        "pandas>=1.0,<4.0",
         "matplotlib>=3.8,<4.0",
     ],
     extras_require={
