@@ -170,7 +170,7 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - `learning_rate` (float): Learning rate for optimization
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
-- `split_test_percentage` (float): Train/test split ratio (0.0-1.0)
+- `split_test_percentage` (float): Test/Train split ratio (0.0-1.0)
 - `scaling` (str): Scaling method ('zscore', 'minmax', 'log', 'mean' or None)
 - `graphical` (bool): Display training plot
 - `real_time` (bool): Update training plot in real-time
@@ -178,6 +178,66 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - `test_loss` (bool): Prints the loss of the predicted and test data
 - `scatter_comparison` (bool): Display the scatter plot Test vs. Predicted
 - Returns: Tuple of (predictions, train_predictions, X_train, X_test, y_train, y_test)
+
+### Scaling
+
+Class for applying scaling to you dataset
+
+#### Methods
+
+**`zScore(x)`**
+
+Applies a Z-score standardization
+
+- `x` (array): Features to scale
+
+**`MinMax(x)`**
+
+Applies a Min-Max standardization
+
+- `x` (array): Features to scale
+
+**`LogNorm(x)`**
+
+Applies a natural log transformation
+
+- `x` (array): Features to scale
+
+**`MeanNorm(x)`**
+
+Applies a a mean normalization
+
+- `x` (array): Features to scale
+
+### Automatic Train/Test split function
+
+**`train_test_split(X, y, split_test_percentage)`**
+
+Splits the dataset into Train and Test sets
+
+- `X` (array): Full dataset features
+- `y` (array): Full dataset labels
+- `split_test_percentage` (float): Test/Train split ratio (0.0-1.0)
+
+### Loss functions
+
+Currently, the model utilized the Mean Squared Error (MSE) for the training (in the future, other functions will be added)
+However, it is possible to call both the MSE and the Mean Absolute Error (MAE) functions for personal uses as well
+
+**`MSE(y_true, y_pred)`**
+
+Calculates the Mean Squared Error between the predicted and testing data
+
+- `y_true` (array): Testing labels
+- `y_pred` (array): Predicted labels
+
+**`MAE(y_true, y_pred)`**
+
+Calculates the Mean Squared Error between the predicted and testing data
+
+- `y_true` (array): Testing labels
+- `y_pred` (array): Predicted labels
+
 
 ## Supported Activation Functions
 
