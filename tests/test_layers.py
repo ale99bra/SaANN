@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from saann.layers import Layer
+from saann.layers import DenseLayer
 
 
 class TestLayer(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestLayer(unittest.TestCase):
 
     def test_layer_initialization(self):
         """Test that layer initializes correctly"""
-        layer = Layer(
+        layer = DenseLayer(
             input_size=self.input_size,
             output_size=self.output_size,
             activation="relu",
@@ -28,7 +28,7 @@ class TestLayer(unittest.TestCase):
 
     def test_layer_forward_pass(self):
         """Test layer forward pass"""
-        layer = Layer(
+        layer = DenseLayer(
             input_size=self.input_size,
             output_size=self.output_size,
             activation="relu",
@@ -43,7 +43,7 @@ class TestLayer(unittest.TestCase):
 
     def test_layer_backward_pass(self):
         """Test layer backward pass"""
-        layer = Layer(
+        layer = DenseLayer(
             input_size=self.input_size,
             output_size=self.output_size,
             activation="relu",
@@ -65,7 +65,7 @@ class TestLayer(unittest.TestCase):
 
     def test_layer_weight_shapes(self):
         """Test that layer weights have correct shapes"""
-        layer = Layer(
+        layer = DenseLayer(
             input_size=self.input_size,
             output_size=self.output_size,
             activation="sigmoid",
@@ -81,7 +81,7 @@ class TestLayer(unittest.TestCase):
         
         for activation in activations:
             with self.subTest(activation=activation):
-                layer = Layer(
+                layer = DenseLayer(
                     input_size=self.input_size,
                     output_size=self.output_size,
                     activation=activation,
