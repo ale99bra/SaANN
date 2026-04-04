@@ -149,9 +149,9 @@ Trains the model on data.
 - `y` (array): Training labels
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
-- `graphical` (bool): Display live training plots
-- `real_time` (bool): Update plots in real-time
-- `log_plot` (bool): Log training history
+- `graphical` (bool): Display training plot
+- `real_time` (bool): Update training plot in real-time
+- `log_plot` (bool): Display plot in a semilogy scale
 
 **`predict(X)`**
 
@@ -166,10 +166,17 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 
 - `X` (array): Full dataset features
 - `y` (array): Full dataset labels
-- `layers_info` (list): Layer specifications
+- `layers_info` (list): List of tuples `(input_size, neurons, activation, initialization)`
+- `learning_rate` (float): Learning rate for optimization
+- `epochs` (int): Number of training epochs
+- `batch_size` (int): Batch size for training
 - `split_test_percentage` (float): Train/test split ratio (0.0-1.0)
-- `scaling` (str): Scaling method ('minmax', 'standard', or None)
-- `graphical` (bool): Display plots
+- `scaling` (str): Scaling method ('zscore', 'minmax', 'log', 'mean' or None)
+- `graphical` (bool): Display training plot
+- `real_time` (bool): Update training plot in real-time
+- `log_plot` (bool): Display plot in a semilogy scale
+- `test_loss` (bool): Prints the loss of the predicted and test data
+- `scatter_comparison` (bool): Display the scatter plot Test vs. Predicted
 - Returns: Tuple of (predictions, train_predictions, X_train, X_test, y_train, y_test)
 
 ## Supported Activation Functions
@@ -178,6 +185,7 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - **sigmoid**: Sigmoid function
 - **tanh**: Hyperbolic tangent
 - **linear**: Linear activation (identity)
+- **softmax**: Softmax activation
 
 ## Initialization Strategies
 
@@ -189,8 +197,9 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 
 See the `examples/` directory for complete working examples:
 
-- `basic_example.py`: Manual workflow demonstration
-- `automatic_example.py`: Automatic workflow with visualization
+- `diabetes_dataset_example.ipynb`: Manual workflow using Scikit-learn diabetes dataset with visualization
+- `automatic_diabetes_dataset_example.ipynb`: Automatic workflow using Scikit-learn diabetes dataset with visualization
+- `XOR_example.ipynb`: Testing of the capabilities of the non-linearity application
 
 ## Architecture Overview
 
@@ -209,11 +218,11 @@ SaANN implements a Multi-Layer Perceptron (MLP) with:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Contributions are welcome! Please feel free to submit issues or pull requests (be aware that this is mostly a learning project).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](SaANN\LICENCE) file for details.
 
 ## Author
 

@@ -209,7 +209,7 @@ class SequentialModel:
         :param graphical: Display the Loss graph at the end of the fitting.\n
         :param real_time: Display the Loss graph in real time.\n
         :param log_plot: Display the Loss graph in semilogy scale\n
-        :param test_loss: Returns and prints the loss of the predicted and test data\n
+        :param test_loss: Prints the loss of the predicted and test data\n
         :param scatter_comparison: Display the scatter plot Test vs. Predicted.\n
 
         Returns
