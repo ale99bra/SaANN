@@ -2,7 +2,6 @@ import unittest
 import numpy as np
 from saann import activation_functions as af
 
-
 class TestActivationFunctions(unittest.TestCase):
     """Test suite for activation functions"""
 
@@ -13,13 +12,13 @@ class TestActivationFunctions(unittest.TestCase):
 
     def test_relu_activation(self):
         """Test ReLU activation function"""
-        output = af.relu(self.X)
+        output = af.reLU(self.X)
         expected = np.array([0, 0, 0, 1, 2], dtype=float)
         np.testing.assert_array_equal(output, expected)
 
     def test_relu_derivative(self):
         """Test ReLU derivative"""
-        output = af.relu_derivative(self.X)
+        output = af.reLU_der(self.X)
         expected = np.array([0, 0, 0, 1, 1], dtype=float)
         np.testing.assert_array_equal(output, expected)
 
@@ -52,7 +51,7 @@ class TestActivationFunctions(unittest.TestCase):
 
     def test_linear_derivative(self):
         """Test linear derivative (should be all ones)"""
-        output = af.linear_derivative(self.X)
+        output = af.linear_der(self.X)
         expected = np.ones_like(self.X)
         np.testing.assert_array_equal(output, expected)
 
