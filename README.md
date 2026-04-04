@@ -109,21 +109,25 @@ y_pred, final_pred_train, X_train, X_test, y_train, y_test = model.automatic(
 
 ```
 SaANN/
-├── README.md                      # This file
-├── LICENSE                        # MIT License
-├── requirements.txt               # Project dependencies
-├── setup.py                       # Installation configuration
+├── README.md                                       # This file
+├── LICENSE                                         # MIT License
+├── requirements.txt                                # Project dependencies
+├── setup.py                                        # Installation configuration
 ├── .gitignore
 │
-└── saann/                         # Main package
+└── saann/                                          # Main package
     ├── __init__.py
-    ├── activation_functions.py    # Activation functions (ReLU, Sigmoid, etc.)
-    ├── gradients.py               # Gradient computations
-    ├── initiations.py             # Weight initialization strategies
-    ├── layers.py                  # Layer implementations
-    ├── losses.py                  # Loss functions
-    ├── models.py                  # Sequential model class
-    └── processing.py              # Data preprocessing utilities
+    ├── activation_functions.py                     # Activation functions (ReLU, Sigmoid, etc.)
+    ├── gradients.py                                # Gradient computations
+    ├── initiations.py                              # Weight initialization strategies (He, Xavier, Random)
+    ├── layers.py                                   # Layer implementations
+    ├── losses.py                                   # Loss functions
+    ├── models.py                                   # Sequential model class
+    └── processing.py                               # Data preprocessing utilities
+└── examples/                                       # Main package
+    ├── automatic_diabetes_dataset_example.ipynb    # Example of automatic workflow
+    ├── diabetes_dataset_example.ipynb              # Example of manual workflow
+    └── XOR_example.ipynb                           # Example of manual workflow
 ```
 
 ## API Documentation
