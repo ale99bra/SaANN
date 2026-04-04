@@ -1,5 +1,9 @@
 # SaANN - Self-automated Artificial Neural Network
 
+[![Tests](https://github.com/ale99bra/SaANN/workflows/Run%20Tests/badge.svg)](https://github.com/ale99bra/SaANN/actions)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A from-scratch implementation of an Artificial Neural Network (ANN) with multi-layer perceptron architecture. SaANN provides both manual and automatic workflows for building, training, and evaluating neural networks without relying on high-level frameworks like TensorFlow or PyTorch.
 
 Made as a personal project for learning purposes.
@@ -129,6 +133,15 @@ SaANN/
     ├── automatic_diabetes_dataset_example.ipynb    # Example of automatic workflow
     ├── diabetes_dataset_example.ipynb              # Example of manual workflow
     └── XOR_example.ipynb                           # Example of manual workflow
+│
+└── .github/workflows                               
+    └── tests.tml                                   # For running tests
+│
+└── tests
+    ├── __init__.py  
+    ├── test_activations.py                         # Test script for activation functions
+    ├── test_layers.py                              # Test script for DenseLayer class
+    └── test_models.py                              # Test script for model                       
 ```
 
 ## API Documentation
