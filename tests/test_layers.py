@@ -24,7 +24,7 @@ class TestLayer(unittest.TestCase):
         
         self.assertIsNotNone(layer)
         self.assertEqual(layer.weights.shape, (self.input_size, self.output_size))
-        self.assertEqual(layer.bias.shape, (1, self.output_size))
+        self.assertEqual(layer.biases.shape, (1, self.output_size))
 
     def test_layer_forward_pass(self):
         """Test layer forward pass"""
@@ -73,7 +73,7 @@ class TestLayer(unittest.TestCase):
         )
         
         self.assertEqual(layer.weights.shape, (self.input_size, self.output_size))
-        self.assertEqual(layer.bias.shape, (1, self.output_size))
+        self.assertEqual(layer.biases.shape, (1, self.output_size))
 
     def test_different_activations(self):
         """Test layer with different activation functions"""
