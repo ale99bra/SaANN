@@ -119,12 +119,13 @@ SaANN/
     ├── __init__.py
     ├── activation_functions.py                     # Activation functions (ReLU, Sigmoid, etc.)
     ├── gradients.py                                # Gradient computations
-    ├── initiations.py                              # Weight initialization strategies (He, Xavier, Random)
+    ├── initiations.py                              # Weight initialization (He, Xavier, Random)
     ├── layers.py                                   # Layer implementations
     ├── losses.py                                   # Loss functions
     ├── models.py                                   # Sequential model class
     └── processing.py                               # Data preprocessing utilities
-└── examples/                                       # Main package
+│
+└── examples/                                       # Examples
     ├── automatic_diabetes_dataset_example.ipynb    # Example of automatic workflow
     ├── diabetes_dataset_example.ipynb              # Example of manual workflow
     └── XOR_example.ipynb                           # Example of manual workflow
