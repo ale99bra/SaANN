@@ -221,7 +221,7 @@ Splits the dataset into Train and Test sets
 
 ### Loss functions
 
-Currently, the model utilized the Mean Squared Error (MSE) for the training (in the future, other functions will be added)
+Currently, the model utilizes the Mean Squared Error (MSE) for the training (in the future, other functions will be added).
 However, it is possible to call both the MSE and the Mean Absolute Error (MAE) functions for personal uses as well
 
 **`MSE(y_true, y_pred)`**
@@ -257,8 +257,8 @@ Calculates the Mean Squared Error between the predicted and testing data
 
 See the `examples/` directory for complete working examples:
 
-- `diabetes_dataset_example.ipynb`: Manual workflow using Scikit-learn diabetes dataset with visualization
-- `automatic_diabetes_dataset_example.ipynb`: Automatic workflow using Scikit-learn diabetes dataset with visualization
+- `diabetes_dataset_example.ipynb`: Manual workflow using `scikit-learn` diabetes dataset with visualization
+- `automatic_diabetes_dataset_example.ipynb`: Automatic workflow using `scikit-learn` diabetes dataset with visualization
 - `XOR_example.ipynb`: Testing of the capabilities of the non-linearity application
 
 ## Architecture Overview
@@ -282,7 +282,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests (b
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](SaANN\LICENCE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENCE) file for details.
 
 ## Author
 
