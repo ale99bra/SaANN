@@ -199,7 +199,7 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 
 ### Scaling
 
-Class for applying scaling to you dataset
+Class for applying scaling to your dataset
 
 #### Methods
 
