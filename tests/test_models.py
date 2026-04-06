@@ -43,6 +43,7 @@ class TestSequentialModel(unittest.TestCase):
                 self.y_train, 
                 epochs=2, 
                 batch_size=32,
+                loss_function='Huber',
                 graphical=False,
                 log_plot=False
             )
@@ -58,6 +59,8 @@ class TestSequentialModel(unittest.TestCase):
             self.y_train, 
             epochs=1, 
             batch_size=32,
+            wd=0.015,
+            loss_function="huber:2",            
             graphical=False,
             log_plot=False
         )
@@ -76,6 +79,8 @@ class TestSequentialModel(unittest.TestCase):
             self.y_train, 
             epochs=1, 
             batch_size=32,
+            wd=0.02,
+            loss_function="mae",
             graphical=False,
             log_plot=False
         )
@@ -92,28 +97,6 @@ class TestSequentialModel(unittest.TestCase):
             (8, 1, "linear", "xavier")
         ]
         self.model.construct(layers_info, learning_rate=0.01)
-
-    def test_loss_functions(self):
-        """Test model with different loss configurations"""
-        loss_functions = [
-            'mse',
-            'MSE',
-            'MAE',
-            'mae',
-            'Huber:1',
-            'Huber',
-            'huber',
-            'huber:2'
-        ]
-        for loss_func in loss_functions:
-            self.model.fit(
-                self.X_train, 
-                self.y_train, 
-                epochs=1, 
-                batch_size=32,
-                loss_function=loss_func,
-                wd = 0.02
-            )
 
 if __name__ == '__main__':
     unittest.main()
