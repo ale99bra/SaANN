@@ -3,7 +3,7 @@
 # Licensed under the MIT License
 
 import numpy as np
-from .losses import MSE, MSE_der
+from . import losses
 from .gradients import SGD
 from .layers import MLP, DenseLayer
 from .processing import Scaling, train_test_split
@@ -72,7 +72,7 @@ class SequentialModel:
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, graphical = False, real_time = False, log_plot = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
@@ -83,6 +83,7 @@ class SequentialModel:
         :params y_train: y split for the training\n
         :params batch_size: Size of each batch\n
         :params wd: Hyperparameter for the model regularization (weight decay)\n
+        :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
         :params graphical: Display the Loss graph at the end of the fitting\n
         :params real_time: Display the Loss graph in real time\n
         :params log_plot: Display the Loss graph in semilogy scale
@@ -101,6 +102,28 @@ class SequentialModel:
 
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
+
+        try:
+            tmp = loss_function.split(sep=':')
+            self.delta = float(tmp[1])
+            loss_function = tmp[0]
+        except:
+            loss_function = tmp[0]
+            self.delta = 1
+
+        if loss_function.lower() == "mse":
+            self.loss_func = losses.MSE
+            self.loss_gradient = losses.MSE_der
+        elif loss_function.lower() == "mae":
+            self.loss_func = losses.MAE
+            self.loss_gradient = losses.MAE_der
+        elif loss_function.lower() == "huber":
+            self.loss_func = losses.Huber
+            self.loss_gradient = losses.Huber_der
+            #self.delta = float(input("For 'Huber' loss function an additional hyperparameter is needed.\n Please provide the threshold - quadratic to linear: "))
+        else:
+            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
+
 
         if real_time == True and graphical == False:
             warnings.warn("The parameter graphical is set to False while real_time is True. Assuming graphical = True.")
@@ -130,10 +153,17 @@ class SequentialModel:
 
                 
                 y_pred = self.mlp.forward(X_batch)
-                loss = MSE(y_batch, y_pred)
+                try:
+                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
+                except:
+                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
                 tot_loss += loss
 
-                d_loss_wrt_pred = MSE_der(y_true=y_batch, y_pred=y_pred) + 2*wd*np.sum(self.mlp.layers[0].weights)
+                try:
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred) + 2*wd*np.sum(self.mlp.layers[0].weights)
+                except:
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta) + 2*wd*np.sum(self.mlp.layers[0].weights)
+
                 self.mlp.backward(d_loss_wrt_pred)
     
                 for layer in self.mlp.layers:
@@ -157,8 +187,11 @@ class SequentialModel:
                 
         
         self.final_pred = self.mlp.forward(X_train)
-        self.final_loss = MSE(y_train, self.final_pred)
-        print(f"\nFinal MSE Loss on training data: {self.final_loss:.5f}")
+        try:
+            self.final_loss = self.loss_func(y_train, self.final_pred)
+        except:
+            self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
+        print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
 
         if graphical:
             plt.clf()
@@ -194,7 +227,7 @@ class SequentialModel:
         y_pred = self.mlp.forward(X_test)
         return y_pred
     
-    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
+    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
         """
         Performs the *construction*, *fitting* and *prediction* based on the parameters given.\n
         Parameters
@@ -206,6 +239,7 @@ class SequentialModel:
         :param epochs: Number of iterations for the training loop.\n
         :param batch_size: Size of the batches used in the training loop.\n
         :params wd: Hyperparameter for the model regularization (weight decay)\n
+        :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
         :param split_test_percentage: Percentage of the total array size used to obtain the Test arrays.\n
         :param scaling: Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
         :param graphical: Display the Loss graph at the end of the fitting.\n
@@ -256,11 +290,14 @@ class SequentialModel:
             warnings.warn(f"Learning rate might be too high for the scaled data. It is recommended to reduce it by a factor x{sc_down}")
 
         self.construct(layers_info=layers_info, learning_rate=learning_rate)
-        final_pred_train = self.fit(X_train=X_train, y_train=y_train, epochs=epochs, batch_size=batch_size, wd=wd, graphical=graphical, real_time=real_time, log_plot=log_plot)
+        final_pred_train = self.fit(X_train=X_train, y_train=y_train, epochs=epochs, batch_size=batch_size, wd=wd, loss_function=loss_function, graphical=graphical, real_time=real_time, log_plot=log_plot)
         y_pred = self.predict(X_test=X_test)
         if test_loss:
-            test_loss_value = MSE(y_true=y_test, y_pred=y_pred)
-            print(f"\nMean Squared Error of Test vs. Predicted: {test_loss_value:2g}")
+            try:
+                test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred)
+            except:
+                test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred, delta=self.delta)
+            print(f"\n'{loss_function}' loss function result of Test vs. Predicted: {test_loss_value:2g}")
          
         if scatter_comparison:
             plt.scatter(x=y_pred, y=y_test)
