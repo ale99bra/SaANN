@@ -70,7 +70,7 @@ layer_info = [
 
 # Build and train
 model.construct(layer_info, learning_rate=0.01)
-model.fit(X_train, y_train, epochs=1000, batch_size=32, graphical=False, real_time=False, log_plot=False)
+model.fit(X_train, y_train, epochs=1000, batch_size=32, wd = 0.01, graphical=False, real_time=False, log_plot=False)
 
 # Make predictions
 y_pred = model.predict(X_test)
@@ -99,6 +99,7 @@ y_pred, final_pred_train, X_train, X_test, y_train, y_test = model.automatic(
     learning_rate=0.01,
     epochs=1000,
     batch_size=32,
+    wd=0.01,
     split_test_percentage=0.3,
     scaling='minmax',
     graphical=True,
@@ -152,14 +153,14 @@ Main class for building and training neural networks.
 
 #### Methods
 
-**`construct(layers_info, learning_rate=0.01)`**
+**`construct(layers_info, learning_rate)`**
 
 Builds the network architecture.
 
 - `layers_info` (list): List of tuples `(input_size, neurons, activation, initialization)`
 - `learning_rate` (float): Learning rate for optimization
 
-**`fit(X, y, epochs=1000, batch_size=32, graphical=False, real_time=False, log_plot=False)`**
+**`fit(X, y, epochs, batch_size, wd, graphical, real_time, log_plot)`**
 
 Trains the model on data.
 
@@ -167,6 +168,7 @@ Trains the model on data.
 - `y` (array): Training labels
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
+- `wd` (float): Weight decay factor for regularization
 - `graphical` (bool): Display training plot
 - `real_time` (bool): Update training plot in real-time
 - `log_plot` (bool): Display plot in a semilogy scale
@@ -178,7 +180,7 @@ Makes predictions on new data.
 - `X` (array): Input features
 - Returns: Predictions (array)
 
-**`automatic(X, y, layers_info, learning_rate=0.01, epochs=1000, batch_size=32, split_test_percentage=0.3, scaling='minmax', graphical=True, real_time=False, log_plot=True, test_loss=True, scatter_comparison=True)`**
+**`automatic(X, y, layers_info, learning_rate, epochs, batch_size, wd, split_test_percentage, scaling, graphical, real_time, log_plot, test_loss, scatter_comparison)`**
 
 Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 
@@ -188,6 +190,7 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - `learning_rate` (float): Learning rate for optimization
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
+- `wd` (float): Weight decay factor for regularization
 - `split_test_percentage` (float): Test/Train split ratio (0.0-1.0)
 - `scaling` (str): Scaling method ('zscore', 'minmax', 'log', 'mean' or None)
 - `graphical` (bool): Display training plot
