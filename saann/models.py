@@ -5,7 +5,7 @@
 import numpy as np
 from .losses import MSE, MSE_der
 from .gradients import SGD
-from .layers import MLP
+from .layers import MLP, DenseLayer
 from .processing import Scaling, train_test_split
 import warnings
 import matplotlib.pyplot as plt
@@ -72,16 +72,17 @@ class SequentialModel:
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
 
-    def fit(self, X_train, y_train, epochs, batch_size, graphical = False, real_time = False, log_plot = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, graphical = False, real_time = False, log_plot = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
         ----------
-        :params epochs: number of epochs\n
+        :params epochs: Number of epochs\n
         :params batch_size: Size of each batch\n
         :params X_train: X split for the training\n
         :params y_train: y split for the training\n
-        :params batch_size: size of each batch\n
+        :params batch_size: Size of each batch\n
+        :params wd: Hyperparameter for the model regularization (weight decay)\n
         :params graphical: Display the Loss graph at the end of the fitting\n
         :params real_time: Display the Loss graph in real time\n
         :params log_plot: Display the Loss graph in semilogy scale
@@ -132,7 +133,7 @@ class SequentialModel:
                 loss = MSE(y_batch, y_pred)
                 tot_loss += loss
 
-                d_loss_wrt_pred = MSE_der(y_true=y_batch, y_pred=y_pred)
+                d_loss_wrt_pred = MSE_der(y_true=y_batch, y_pred=y_pred) + 2*wd*np.sum(self.mlp.layers[0].weights)
                 self.mlp.backward(d_loss_wrt_pred)
     
                 for layer in self.mlp.layers:
@@ -193,7 +194,7 @@ class SequentialModel:
         y_pred = self.mlp.forward(X_test)
         return y_pred
     
-    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
+    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
         """
         Performs the *construction*, *fitting* and *prediction* based on the parameters given.\n
         Parameters
@@ -204,6 +205,7 @@ class SequentialModel:
         :param learning_rate: Hyperparameter that controls the step size.\n
         :param epochs: Number of iterations for the training loop.\n
         :param batch_size: Size of the batches used in the training loop.\n
+        :params wd: Hyperparameter for the model regularization (weight decay)\n
         :param split_test_percentage: Percentage of the total array size used to obtain the Test arrays.\n
         :param scaling: Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
         :param graphical: Display the Loss graph at the end of the fitting.\n
@@ -254,7 +256,7 @@ class SequentialModel:
             warnings.warn(f"Learning rate might be too high for the scaled data. It is recommended to reduce it by a factor x{sc_down}")
 
         self.construct(layers_info=layers_info, learning_rate=learning_rate)
-        final_pred_train = self.fit(X_train=X_train, y_train=y_train, epochs=epochs, batch_size=batch_size, graphical=graphical, real_time=real_time, log_plot=log_plot)
+        final_pred_train = self.fit(X_train=X_train, y_train=y_train, epochs=epochs, batch_size=batch_size, wd=wd, graphical=graphical, real_time=real_time, log_plot=log_plot)
         y_pred = self.predict(X_test=X_test)
         if test_loss:
             test_loss_value = MSE(y_true=y_test, y_pred=y_pred)
