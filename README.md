@@ -246,7 +246,7 @@ Splits the dataset into Train and Test sets
 
 ### Loss functions
 
-It is possible to use three loss functions: MSE, MAE and Huber with regularization. It is possible to use them outside of the model and is also possible to compute coefficient of determination (R-squared). These functions are found under saann.losses
+It is possible to use three loss functions: MSE, MAE and Huber with regularization. It is possible to use them outside of the model and is also possible to compute the coefficient of determination (R-squared). These functions are found under saann.losses
 
 **`MSE(y_true, y_pred)`**
 
