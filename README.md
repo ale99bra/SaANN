@@ -246,8 +246,7 @@ Splits the dataset into Train and Test sets
 
 ### Loss functions
 
-Currently, the model utilizes the Mean Squared Error (MSE) for the training (in the future, other functions will be added).
-However, it is possible to call both the MSE and the Mean Absolute Error (MAE) functions for personal uses as well
+It is possible to use three loss functions: MSE, MAE and Huber with regularization. It is possible to use them outside of the model and is also possible to compute coefficient of determination (R-squared). These functions are found under saann.losses
 
 **`MSE(y_true, y_pred)`**
 
@@ -259,6 +258,21 @@ Calculates the Mean Squared Error between the predicted and testing data
 **`MAE(y_true, y_pred)`**
 
 Calculates the Mean Squared Error between the predicted and testing data
+
+- `y_true` (array): Testing labels
+- `y_pred` (array): Predicted labels
+
+**`Huber(y_true, y_pred, delta)`**
+
+Calculates the Huber loss between the predicted and testing data
+
+- `y_true` (array): Testing labels
+- `y_pred` (array): Predicted labels
+- `delta` (float): Hyperparameter for defining the threshold - quadratic to linear
+
+**`R2_score(y_true, y_pred)`**
+
+Calculates the coefficient of determination metric
 
 - `y_true` (array): Testing labels
 - `y_pred` (array): Predicted labels
