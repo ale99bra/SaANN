@@ -10,8 +10,8 @@ class TestSequentialModel(unittest.TestCase):
         """Initialize test fixtures before each test"""
         self.model = SequentialModel()
         np.random.seed(42)
-        self.X_train = np.random.randn(100, 5)
-        self.y_train = np.random.randn(100, 1)
+        self.X_train = np.random.randn(50, 5)
+        self.y_train = np.random.randn(50, 1)
         self.X_test = np.random.randn(20, 5)
 
     def test_model_initialization(self):
@@ -88,10 +88,32 @@ class TestSequentialModel(unittest.TestCase):
         """Test model with different layer configurations"""
         layers_info = [
             (5, 16, "relu", "he"),
-            (16, 8, "relu", "he"),
-            (8, 1, "linear", "he")
+            (16, 8, "sigmoid", "random"),
+            (8, 1, "linear", "xavier")
         ]
         self.model.construct(layers_info, learning_rate=0.01)
+
+    def test_loss_functions(self):
+        """Test model with different loss configurations"""
+        loss_functions = [
+            'mse',
+            'MSE',
+            'MAE',
+            'mae',
+            'Huber:1',
+            'Huber',
+            'huber',
+            'huber:2'
+        ]
+        for loss_func in loss_functions:
+            self.model.fit(
+                self.X_train, 
+                self.y_train, 
+                epochs=1, 
+                batch_size=32,
+                loss_function=loss_func,
+                wd = 0.02
+            )
 
 if __name__ == '__main__':
     unittest.main()
