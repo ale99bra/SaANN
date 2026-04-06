@@ -19,6 +19,7 @@ Made as a personal project for learning purposes.
 - **Multiple Activation Functions**: ReLU, Sigmoid, Tanh, Linear, and Softmax
 - **Advanced Training Options**: Batch training, configurable learning rates
 - **Multiple Initialization Strategies**: He, Xavier, and random initialization
+- **Multiple Loss Functions**: MSE, MAE and Huber loss functions with regularization
 
 ## Installation
 
@@ -70,7 +71,7 @@ layer_info = [
 
 # Build and train
 model.construct(layer_info, learning_rate=0.01)
-model.fit(X_train, y_train, epochs=1000, batch_size=32, wd = 0.01, graphical=False, real_time=False, log_plot=False)
+model.fit(X_train, y_train, epochs=1000, batch_size=32, wd = 0.01, loss_function='MSE', graphical=False, real_time=False, log_plot=False)
 
 # Make predictions
 y_pred = model.predict(X_test)
@@ -100,6 +101,7 @@ y_pred, final_pred_train, X_train, X_test, y_train, y_test = model.automatic(
     epochs=1000,
     batch_size=32,
     wd=0.01,
+    loss_function='MSE',
     split_test_percentage=0.3,
     scaling='minmax',
     graphical=True,
@@ -160,7 +162,7 @@ Builds the network architecture.
 - `layers_info` (list): List of tuples `(input_size, neurons, activation, initialization)`
 - `learning_rate` (float): Learning rate for optimization
 
-**`fit(X, y, epochs, batch_size, wd, graphical, real_time, log_plot)`**
+**`fit(X, y, epochs, batch_size, wd, loss_function, graphical, real_time, log_plot)`**
 
 Trains the model on data.
 
@@ -169,6 +171,7 @@ Trains the model on data.
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
 - `wd` (float): Weight decay factor for regularization
+- `loss_function` (str): Loss function to utilize during training: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter for the quadratic-linear threshold. E.g. 'Huber:1.3')
 - `graphical` (bool): Display training plot
 - `real_time` (bool): Update training plot in real-time
 - `log_plot` (bool): Display plot in a semilogy scale
@@ -191,6 +194,7 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
 - `wd` (float): Weight decay factor for regularization
+- `loss_function` (str): Loss function to utilize during training: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter for the quadratic-linear threshold. E.g. 'Huber:1.3')
 - `split_test_percentage` (float): Test/Train split ratio (0.0-1.0)
 - `scaling` (str): Scaling method ('zscore', 'minmax', 'log', 'mean' or None)
 - `graphical` (bool): Display training plot
