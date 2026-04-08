@@ -77,7 +77,7 @@ class DenseLayer:
             self.d_output = AF.reLU_der(self.output)
         elif self.activation == "softmax":
             self.output = AF.softmax(raw_output)
-            self.d_output = AF.softmax_der(self.output)
+            self.d_output = None
         elif self.activation == "linear":
             self.output = AF.linear(raw_output)
             self.d_output = AF.linear_der(self.output)
@@ -89,18 +89,27 @@ class DenseLayer:
 
         return self.output
     
-    def backward(self, d_loss_wrt_output):
+    def backward(self, d_loss_wrt_output, wd):
         """
         Calculating the backpropagation.\n
         Parameters
         ----------
         :d_loss_wrt_output: Gradient of the loss with respect to this layer's output
         """
-        d_activation_output = d_loss_wrt_output * self.d_output #gradient of loss w.r.t. pre-activation output
+        if self.activation == "softmax":
+            d_activation_output = d_loss_wrt_output
+        else:
+            d_activation_output = d_loss_wrt_output * self.d_output #gradient of loss w.r.t. pre-activation output
 
-        self.d_weights = np.dot(self.inputs.T, d_activation_output) # gradient of loss w.r.t. weights
+        batch_size = self.inputs.shape[0]
 
-        self.d_biases = np.sum(d_activation_output, axis=0, keepdims=True) # gradient of loss w.r.t. biases
+        self.d_weights = np.dot(self.inputs.T, d_activation_output) / batch_size # gradient of loss w.r.t. weights
+        self.d_biases = np.sum(d_activation_output, axis=0, keepdims=True) / batch_size # gradient of loss w.r.t. biases
+
+        self.d_weights += 2 * wd * self.weights
+
+        self.d_weights = np.clip(self.d_weights, -1, 1)
+        self.d_biases = np.clip(self.d_biases, -1, 1)
 
         d_loss_wrt_prev_output = np.dot(d_activation_output, self.weights.T)
 
@@ -154,11 +163,12 @@ class MLP:
         :inputs: Input data for the input layer
         """
         curr_input = inputs #initialization
+
         for layer in self.layers: #iterate through each layer
             curr_input = layer.forward(curr_input) #update the input
         return curr_input
     
-    def backward(self, d_loss_wrt_pred):
+    def backward(self, d_loss_wrt_pred, wd):
         """
         Performs the backpropagation.\n
         Parameters
@@ -167,6 +177,6 @@ class MLP:
         """
         curr_d_loss = d_loss_wrt_pred
         for layer in reversed(self.layers):
-            curr_d_loss = layer.backward(curr_d_loss)
+            curr_d_loss = layer.backward(curr_d_loss, wd)
 
         return curr_d_loss
