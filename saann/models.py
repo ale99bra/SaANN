@@ -1,6 +1,7 @@
 # models.py
 # Copyright (c) 2026 Alessio Branda
 # Licensed under the MIT License
+#PUT BACK THE DOTS
 
 import numpy as np
 from . import losses
@@ -111,7 +112,10 @@ class SequentialModel:
             loss_function = tmp[0]
             self.delta = 1
 
-        if loss_function.lower() == "mse":
+        if self.mlp.layers[-1].activation == "softmax":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+        elif loss_function.lower() == "mse":
             self.loss_func = losses.MSE
             self.loss_gradient = losses.MSE_der
         elif loss_function.lower() == "mae":
@@ -157,14 +161,15 @@ class SequentialModel:
                     loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
                 except:
                     loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
-                tot_loss += loss
 
+                tot_loss += np.mean(loss)
+                
                 try:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred) + 2*wd*np.sum(self.mlp.layers[0].weights)
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
                 except:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta) + 2*wd*np.sum(self.mlp.layers[0].weights)
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
 
-                self.mlp.backward(d_loss_wrt_pred)
+                self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred, wd=wd)
     
                 for layer in self.mlp.layers:
                     self.optimizer.update(layer)
@@ -172,7 +177,7 @@ class SequentialModel:
             # Average loss over all batches for reporting
             avg_loss = tot_loss / num_batches
             if (epoch + 1) % (epochs // 10 if epochs >=10 else 1) == 0 or epoch == 0:
-                print(f"Epoch {epoch+1:4d}/{epochs}, Loss (MSE): {avg_loss:.5f}")
+                print(f"Epoch {epoch+1:4d}/{epochs}, Loss: {avg_loss:.5f}")
             if graphical:
                 loss_list.append(avg_loss)
             if real_time:
@@ -191,12 +196,12 @@ class SequentialModel:
             self.final_loss = self.loss_func(y_train, self.final_pred)
         except:
             self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
-        print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
-
+        if self.mlp.layers[-1].activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {np.mean(self.final_loss):.5f}")
+        else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
         if graphical:
             plt.clf()
             if real_time:plt.ioff()
-            if log_plot: plt.semilogy(np.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+            if log_plot:plt.semilogy(np.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
             else: plt.plot(np.arange(1, epochs+1, step = 1), loss_list, linestyle = '-')
             plt.title(f"Average loss (over the {num_batches} batches) over the epochs")
             plt.xlabel("Epoch")
@@ -261,7 +266,7 @@ class SequentialModel:
         -------
             >>> model = SequentialModel()
         >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
-        >>> y_pred, final_pred_train, X_train, X_test, y_train, y_test = model.automatic(X=X, y=y, layers_info=ly_info, learning_rate=0.01, epochs=1000, batch_size=32, split_test_percentage=0.3, scaling='minmax', graphical=True, real_time=False, log_plot = True, test_loss = True, scatter_comparison = True)
+        >>> y_pred, final_pred_train, X_train, X_test, y_train, y_test = model.automatic(X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False)
         """
         print("Starting the automatic pipeline.\n")
         if scaling == None:
@@ -297,23 +302,27 @@ class SequentialModel:
                 test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred)
             except:
                 test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred, delta=self.delta)
-            print(f"\n'{loss_function}' loss function result of Test vs. Predicted: {test_loss_value:2g}")
-         
+            if self.loss_func != losses.cross_entropy: print(f"\n'{loss_function}' loss function result of Test vs. Predicted: {test_loss_value:2g}")
+            else: print(f"\n'cross-entropy' loss function result of Test vs. Predicted: {np.mean(test_loss_value):2g}")
         if scatter_comparison:
-            plt.scatter(x=y_pred, y=y_test)
-            plt.title("Test data vs. Predicted data")
-            plt.ylabel("Test")
-            plt.xlabel("Prediction")
-            if np.min(y_pred) < np.min(y_test):
-                limit_min = np.min(y_pred)
-            else:
-                limit_min = np.min(y_test)
-            if np.max(y_pred) > np.max(y_test):
-                limit_max = np.max(y_pred)
-            else:
-                limit_max = np.max(y_test)
-            plt.xlim(limit_min*0.85, limit_max + (limit_min*0.15))
-            plt.ylim(limit_min*0.85, limit_max + (limit_min*0.15))
-            plt.show()
+            try:
+                plt.scatter(x=y_pred, y=y_test)
+                plt.title("Test data vs. Predicted data")
+                plt.ylabel("Test")
+                plt.xlabel("Prediction")
+                if np.min(y_pred) < np.min(y_test):
+                    limit_min = np.min(y_pred)
+                else:
+                    limit_min = np.min(y_test)
+                if np.max(y_pred) > np.max(y_test):
+                    limit_max = np.max(y_pred)
+                else:
+                    limit_max = np.max(y_test)
+                plt.xlim(limit_min*0.85, limit_max + (limit_min*0.15))
+                plt.ylim(limit_min*0.85, limit_max + (limit_min*0.15))
+                plt.show()
+            except:
+                warnings.warn("Scatter comparison failed.")
+            
 
         return y_pred, final_pred_train, X_train, X_test, y_train, y_test
