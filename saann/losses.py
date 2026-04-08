@@ -93,6 +93,27 @@ def Huber_der(y_true, y_pred, delta):
 
     return score_der
 
+def cross_entropy(y_true, y_pred, epsilon=1e-12):
+    """
+    Calculates the cross_entropy loss.\n
+    Parameters
+    ----------
+    :param y_true: Testing values array.
+    :param y_pred: Array of values predicted by the model.
+    """
+    y_pred = np.clip(y_pred, epsilon, 1. - epsilon)
+    return -np.mean(y_true * np.log(y_pred), axis=1, keepdims=True)
+
+def cross_entropy_der(y_true, y_pred):
+    """
+    Calculates the cross_entropy loss' gradient.\n
+    Parameters
+    ----------
+    :param y_true: Testing values array.
+    :param y_pred: Array of values predicted by the model.
+    """
+    return (y_pred - y_true)
+
 if __name__ == "__main__":
     pred = np.linspace(0, 100, num = 26)
     true = np.linspace(0, 90, num = 26)
