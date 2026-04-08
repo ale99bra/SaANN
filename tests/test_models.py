@@ -97,6 +97,32 @@ class TestSequentialModel(unittest.TestCase):
             (8, 1, "linear", "xavier")
         ]
         self.model.construct(layers_info, learning_rate=0.01)
+    
+    def test_softmax(self):
+        """Test classification model with softmax activation"""
+        layers_info = [(5, 10, "relu", "he"), (10, 2, "softmax", "he")]
+        y_train = []
+        import random
+        for i in range(len(self.X_train)):
+            y_rand = random.choice(([0, 1], [1, 0]))
+            y_train.append(y_rand)
+        y_train = np.array(y_train)
+        y_train = y_train.reshape(-2, 2)
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            y_train, 
+            epochs=1, 
+            batch_size=32,
+            wd=0.02,
+            graphical=False,
+            log_plot=False
+        )
+
+        predictions = self.model.predict(self.X_test)
+        
+        self.assertIsInstance(predictions, np.ndarray)
+
 
 if __name__ == '__main__':
     unittest.main()
