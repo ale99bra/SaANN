@@ -25,6 +25,7 @@ add_cupy_dll_path()
 
 try:
     import cupy as xp
+    dtype = xp.float32
     gpu_available = True
 
     # Warm up GPU
@@ -35,5 +36,6 @@ try:
 
 except ImportError as e:
     import numpy as xp
+    dtype = xp.float32
     gpu_available = False
     print("GPU failed:", e)

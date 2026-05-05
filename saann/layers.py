@@ -100,7 +100,10 @@ class DenseLayer:
         else:
             raise ValueError(f"Activation function '{self.activation}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', 'softmax' or 'linear'.")
 
-        self.output = self.dropout.forward(self.output)
+        if self.activation == "softmax":
+            pass
+        else:
+            self.output = self.dropout.forward(self.output)
 
         return self.output
     
@@ -221,7 +224,10 @@ class Dropout:
             return X
         
     def backward(self, d_out):
-        return d_out * self.mask
+        try:
+            return d_out * self.mask
+        except:
+            return d_out
 
 # Multi-Layer Perceptron class
 class MLP:

@@ -644,7 +644,18 @@ class CNN:
             return out
         
         def backward(self, d_out):
-            d_out = self.bn.backward(d_out)
+
+            # 1. Activation derivative
+            if self.activation_function == "relu":
+                d_act = AF.reLU_der(self.layer_conv) * d_out
+            elif self.activation_function == "sigmoid":
+                d_act = AF.sigmoid_der(self.layer_conv) * d_out
+            elif self.activation_function == "tanh":
+                d_act = AF.tanh_der(self.layer_conv) * d_out
+            else:
+                d_act = d_out  # linear
+
+            d_out = self.bn.backward(d_act)
 
             dX, dW, db = self.conv_backward_im2col(d_out)
 
@@ -666,10 +677,10 @@ class CNN:
             dW_col = d_out_col.T @ X_col
             db = BE.xp.sum(d_out_col, axis=0)
 
-            num_positions = B * H_out * W_out
+            #num_positions = B * H_out * W_out
 
-            dW_col = dW_col / num_positions
-            db = db / num_positions
+            #dW_col = dW_col / num_positions
+            #db = db / num_positions
 
             dW = dW_col.reshape(W.shape)
 
@@ -763,20 +774,26 @@ class CNN:
         # Backprop through Conv3 block
         d = self.conv3b.maxpool_backward(d)
         d = self.conv3b.backward(d)
+        self.conv3b.update(self.learning_rate, self.wd)
         d = self.conv3a.backward(d)
+        self.conv3a.update(self.learning_rate, self.wd)
 
         # Backprop through Conv2 block
         d = self.conv2b.maxpool_backward(d)
         d = self.conv2b.backward(d)
+        self.conv2b.update(self.learning_rate, self.wd)
         d = self.conv2a.backward(d)
+        self.conv2a.update(self.learning_rate, self.wd)
 
         # Backprop through Conv1 block
         d = self.conv1b.maxpool_backward(d)
         d = self.conv1b.backward(d)
+        self.conv1b.update(self.learning_rate, self.wd)
         d = self.conv1a.backward(d)
+        self.conv1a.update(self.learning_rate, self.wd)
 
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, graphical = False, real_time = False, log_plot = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.0001, graphical = False, real_time = False, log_plot = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
@@ -810,41 +827,16 @@ class CNN:
         >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
         >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
         """
-
+        self.wd = wd
         num_samples = X_train.shape[0]
         num_samples = len(X_train)
         num_batches = (num_samples + batch_size - 1) // batch_size
-
-        """
-
-        try:
-            tmp = loss_function.split(sep=':')
-            self.delta = float(tmp[1])
-            loss_function = tmp[0]
-        except:
-            loss_function = tmp[0]
-            self.delta = 1
-        """
+        self.num_samples = num_samples
+        self.batch_size = batch_size
+        self.num_classes = y_train.shape[1]
         
         self.loss_func = losses.cross_entropy
         self.loss_gradient = losses.cross_entropy_der
-
-        """
-        if self.mlp.layers[-1].activation == "softmax":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-        elif loss_function.lower() == "mse":
-            self.loss_func = losses.MSE
-            self.loss_gradient = losses.MSE_der
-        elif loss_function.lower() == "mae":
-            self.loss_func = losses.MAE
-            self.loss_gradient = losses.MAE_der
-        elif loss_function.lower() == "huber":
-            self.loss_func = losses.Huber
-            self.loss_gradient = losses.Huber_der
-        else:
-            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
-        """
 
         if real_time == True and graphical == False:
             warnings.warn("The parameter graphical is set to False while real_time is True. Assuming graphical = True.")
@@ -875,9 +867,13 @@ class CNN:
                 
                 conv_out = self.ConvolutionBlock(X=X_batch)
 
-                for out in conv_out:    
+                """for out in conv_out:    
                     batch_conv_outputs_flat.append(out.flatten())
-                batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)
+                batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)"""
+
+                #conv_out = self.ConvolutionBlock(X_batch)      # shape: (B, H, W, C)
+                B = conv_out.shape[0]
+                batch_conv_outputs_flat = conv_out.reshape(B, -1)
 
                 y_pred = self.mlp.forward(batch_conv_outputs_flat)
                 
@@ -886,7 +882,8 @@ class CNN:
                 except:
                     loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
 
-                tot_loss += BE.xp.mean(loss)
+                #tot_loss += BE.xp.mean(loss)
+                tot_loss += loss
                 
                 try:
                     d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
@@ -916,20 +913,38 @@ class CNN:
                 plt.xlabel("Epoch")
                 plt.ylabel("Average loss")
                 plt.pause(5e-3)
-
-        batch_conv_outputs_flat = []
         
-        conv_out = self.ConvolutionBlock(X=X_train)
-        for out in conv_out:
-            batch_conv_outputs_flat.append(out.flatten())
-        batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat) 
-        self.final_pred = self.mlp.forward(batch_conv_outputs_flat)
+        self.final_loss = 0
+        y_final = []
+        j = 0
 
-        try:
-            self.final_loss = self.loss_func(y_train, self.final_pred)
-        except:
-            self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
-        
+        for i in range(0, num_samples, batch_size):
+            j += 1
+            X_batch = X_train[i:i+batch_size]
+            y_batch = y_train[i:i+batch_size]
+            batch_conv_outputs_flat = []
+            
+            conv_out = self.ConvolutionBlock(X=X_batch)
+            """for out in conv_out:
+                batch_conv_outputs_flat.append(out.flatten())
+            batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)"""
+
+            #conv_out = self.ConvolutionBlock(X_batch)
+            B = conv_out.shape[0]
+            batch_conv_outputs_flat = conv_out.reshape(B, -1)
+
+            self.final_pred = self.mlp.forward(batch_conv_outputs_flat)
+
+            try:
+                self.final_loss += self.loss_func(y_batch, self.final_pred)
+            except:
+                self.final_loss += self.loss_func(y_batch, self.final_pred, self.delta)
+            
+            y_final.append(self.final_pred)
+
+        self.final_pred = BE.xp.concatenate(y_final, axis=0)
+        self.final_loss /= num_batches
+
         print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
 
         """
@@ -972,13 +987,27 @@ class CNN:
         >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
         >>> y_pred = model_cnn.predict(X_test=X_train)
         """
-        batch_conv_outputs_flat = []
-        conv_out = self.ConvolutionBlock(X=X_test)
-        for out in conv_out:
-            batch_conv_outputs_flat.append(out.flatten())       
-        batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)
+        y_pred_final = []
+        num_samples = X_test.shape[0]
+        num_samples = len(X_test)
 
-        y_pred = self.mlp.forward(batch_conv_outputs_flat)
+        for i in range(0, num_samples, self.batch_size):
+            X_batch = X_test[i:i+self.batch_size]
+            batch_conv_outputs_flat = []
+            conv_out = self.ConvolutionBlock(X=X_batch)
+
+            B = conv_out.shape[0]
+            batch_conv_outputs_flat = conv_out.reshape(B, -1)
+
+            """
+            for out in conv_out:
+                batch_conv_outputs_flat.append(out.flatten())       
+            batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)"""
+
+            y_pred = self.mlp.forward(batch_conv_outputs_flat)
+            y_pred_final.append(y_pred)
+
+        y_pred = BE.xp.concatenate(y_pred_final, axis=0)
         return y_pred
   
     def get_input_size(self, X_train):

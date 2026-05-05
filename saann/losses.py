@@ -103,7 +103,8 @@ def cross_entropy(y_true, y_pred, epsilon=1e-12):
     :param y_pred: Array of values predicted by the model.
     """
     y_pred = BE.xp.clip(y_pred, epsilon, 1. - epsilon)
-    return -BE.xp.sum(y_true * BE.xp.log(y_pred)) / y_true.shape[0]
+    #return -BE.xp.sum(y_true * BE.xp.log(y_pred)) / y_true.shape[0]
+    return -BE.xp.mean(BE.xp.sum(y_true * BE.xp.log(y_pred), axis=1))
 
 def cross_entropy_der(y_true, y_pred):
     """

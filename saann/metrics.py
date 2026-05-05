@@ -226,7 +226,7 @@ class Metrics:
             else:
                 return auc
 
-    def report(self, graphical = True):
+    def report(self, graphical = True, threshold_step = 5e-3):
         import matplotlib.pyplot as plt
 
         self.report_flag = True
@@ -258,7 +258,7 @@ class Metrics:
 
         if self.y_test.shape[1] > 1:
 
-            auc, roc_curve, auc_curve = self.AUC(graphical=False, threshold_step=5e-3)  
+            auc, roc_curve, auc_curve = self.AUC(graphical=False, threshold_step=threshold_step)  
             print(f"AUC: {auc}")
 
             for k in range(self.y_test.shape[1]):
