@@ -297,10 +297,13 @@ class Metrics:
                 ax2.text(j, i, conf_matrix[i, j], ha="center", va="center", color="w")
         if graphical:
             plt.show()
-
+        else:
+            plt.close()
+        
+        self.report_flag = False
 
 if __name__ == "__main__":
-    classes = 20
+    classes = 1
     data = 1000
     logits = BE.xp.random.randn(data, classes)
     exp_logits = BE.xp.exp(logits)
@@ -327,3 +330,6 @@ if __name__ == "__main__":
 
     metrics = Metrics(y_test=true, y_pred=pred)
     metrics.report(graphical=True)
+
+    auc = metrics.AUC(graphical=True, threshold_step=0.001)
+    print("AUC: ", auc)
