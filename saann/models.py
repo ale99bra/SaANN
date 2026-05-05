@@ -560,14 +560,18 @@ class CNN:
 
         Example
         -------
-            >>> model = SequentialModel()
-        >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
-        >>> model.construct(ly_info, learning_rate=0.2)
+            >>> model_cnn = CNN(filter_size = 3, num_filters = 16, padding = 1, stride = 1, activation_function = "relu", init_function = "he")
+        >>> input_size = model_cnn.get_input_size(X_train=X_train)
+        >>> layer_info = [
+            (input_size, 256, 'relu', 'he'),
+            (256, 128, 'relu', 'he'),
+            (128, y_train.shape[1], 'softmax', 'he')
+        ]
+        >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
         """
         self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
-
 
     class ConvolutionLayer:
 
@@ -671,26 +675,15 @@ class CNN:
 
             d_out_col = d_out.reshape(B*H_out*W_out, self.num_filters)
 
-            #print("d_out_col max:", BE.xp.max(BE.xp.abs(d_out_col)))
-
             # Gradients
             dW_col = d_out_col.T @ X_col
             db = BE.xp.sum(d_out_col, axis=0)
-
-            #num_positions = B * H_out * W_out
-
-            #dW_col = dW_col / num_positions
-            #db = db / num_positions
 
             dW = dW_col.reshape(W.shape)
 
             dX_col = d_out_col @ W_col
 
-            #print("dX_col max:", BE.xp.max(BE.xp.abs(dX_col)))
-
             dX = col2im(dX_col, X.shape, K, stride, padding, H_out=H_out, W_out=W_out)
-
-            #print("dX max:", BE.xp.max(BE.xp.abs(dX)))
             
             return dX, dW, db
         
@@ -867,11 +860,6 @@ class CNN:
                 
                 conv_out = self.ConvolutionBlock(X=X_batch)
 
-                """for out in conv_out:    
-                    batch_conv_outputs_flat.append(out.flatten())
-                batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)"""
-
-                #conv_out = self.ConvolutionBlock(X_batch)      # shape: (B, H, W, C)
                 B = conv_out.shape[0]
                 batch_conv_outputs_flat = conv_out.reshape(B, -1)
 
@@ -882,7 +870,6 @@ class CNN:
                 except:
                     loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
 
-                #tot_loss += BE.xp.mean(loss)
                 tot_loss += loss
                 
                 try:
@@ -925,11 +912,7 @@ class CNN:
             batch_conv_outputs_flat = []
             
             conv_out = self.ConvolutionBlock(X=X_batch)
-            """for out in conv_out:
-                batch_conv_outputs_flat.append(out.flatten())
-            batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)"""
 
-            #conv_out = self.ConvolutionBlock(X_batch)
             B = conv_out.shape[0]
             batch_conv_outputs_flat = conv_out.reshape(B, -1)
 
@@ -946,10 +929,6 @@ class CNN:
         self.final_loss /= num_batches
 
         print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
-
-        """
-        if self.mlp.layers[-1].activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
-        else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")"""
 
         if graphical:
             plt.clf()
@@ -998,11 +977,6 @@ class CNN:
 
             B = conv_out.shape[0]
             batch_conv_outputs_flat = conv_out.reshape(B, -1)
-
-            """
-            for out in conv_out:
-                batch_conv_outputs_flat.append(out.flatten())       
-            batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)"""
 
             y_pred = self.mlp.forward(batch_conv_outputs_flat)
             y_pred_final.append(y_pred)
