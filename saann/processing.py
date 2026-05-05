@@ -5,6 +5,8 @@
 import numpy as np
 import pandas as pd
 import warnings
+from . import backend as BE
+
 
 def train_test_split(X, y, split_test_percentage = 0.3):
     """
@@ -26,33 +28,33 @@ def train_test_split(X, y, split_test_percentage = 0.3):
     Raises
     ------
     :ValueError: If the split test percentage is not a float between 0 and 1, inclusive.\n
-    :ValueError: If param X's (or y's) type is not in (list, np.ndarray, pd.DataFrame).\n
+    :ValueError: If param X's (or y's) type is not in (list, BE.xp.ndarray, pd.DataFrame).\n
     :ValueError: If param X and param y have different lengths.
     
     Example
     -------
         >>> X_train, X_test, y_train, y_test = train_test_split(X, y, split_test_percentage = 0.3)
     """
-    if isinstance(X, (list, np.ndarray, pd.DataFrame)):
-        if isinstance(X, np.ndarray):
+    if isinstance(X, (list, BE.xp.ndarray, pd.DataFrame)):
+        if isinstance(X, BE.xp.ndarray):
             pass
         else:
             try:
                 tmp = type(X)
-                X = np.array(X)
+                X = BE.xp.array(X)
                 warnings.warn(f"Converted 'X' ({tmp}) to {type(X)}.")
             except:
                 raise TypeError(f"The given 'X' type ({type(X)}) is not supported.")
     else:
         raise TypeError(f"The given 'X' type ({type(X)}) is not supported.")
     
-    if isinstance(y, (list, np.ndarray, pd.DataFrame)):
-        if isinstance(y, np.ndarray): 
+    if isinstance(y, (list, BE.xp.ndarray, pd.DataFrame)):
+        if isinstance(y, BE.xp.ndarray): 
             pass
         else:
             try:
                 tmp = type(y)
-                y = np.array(y)
+                y = BE.xp.array(y)
                 warnings.warn(f"Converted 'y' ({tmp}) to {type(y)}.")
             except:
                 raise TypeError(f"The given 'y' type ({type(y)}) is not supported.")
@@ -70,8 +72,12 @@ def train_test_split(X, y, split_test_percentage = 0.3):
     X_test = X[int((1-split_test_percentage)*len(X)):]
     y_test = y[int((1-split_test_percentage)*len(X)):]
 
-    y_train = y_train.reshape(-1, 1)
-    y_test = y_test.reshape(-1, 1)
+    try:
+        y_train = y_train.reshape(-y.shape[1], y.shape[1])
+        y_test = y_test.reshape(-y.shape[1], y.shape[1])
+    except:
+        y_train = y_train.reshape(-1, 1)
+        y_test = y_test.reshape(-1, 1)
 
     return X_train, X_test, y_train, y_test
 
@@ -99,7 +105,7 @@ class Scaling:
             >>> scaler = Scaling()
         >>> x_scaled = scaler.zScore(x)
         """
-        self.scaled_data = (x-np.mean(x))/(np.std(x))
+        self.scaled_data = (x-BE.xp.mean(x))/(BE.xp.std(x))
         return self.scaled_data
     
     def MinMax(self, x):
@@ -118,7 +124,7 @@ class Scaling:
             >>> scaler = Scaling()
         >>> x_scaled = scaler.MinMax(x)
         """
-        self.scaled_data = (x - np.min(x))/(np.max(x)-np.min(x))
+        self.scaled_data = (x - BE.xp.min(x))/(BE.xp.max(x)-BE.xp.min(x))
         return self.scaled_data
     
     def LogNorm(self, x):
@@ -137,7 +143,7 @@ class Scaling:
             >>> scaler = Scaling()
         >>> x_scaled = scaler.LogNorm(x)
         """
-        self.scaled_data = np.log1p(x)
+        self.scaled_data = BE.xp.log1p(x)
         return self.scaled_data
     
     def MeanNorm(self, x):
@@ -156,5 +162,5 @@ class Scaling:
             >>> scaler = Scaling()
         >>> x_scaled = scaler.MeanNorm(x)
         """
-        self.scaled_data = (x-np.mean(x))/(np.max(x)-np.min(x))
+        self.scaled_data = (x-BE.xp.mean(x))/(BE.xp.max(x)-BE.xp.min(x))
         return self.scaled_data

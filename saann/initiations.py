@@ -4,6 +4,8 @@
 
 import numpy as np
 
+from . import backend as BE
+
 # Initialization functions
 def random_scaled_init(num_inputs, num_neurons, scale=0.01):
     """
@@ -14,7 +16,7 @@ def random_scaled_init(num_inputs, num_neurons, scale=0.01):
     :num_neurons: Number of neurons of the layer.
     :scale: scale applied to weights
     """
-    return np.random.randn(num_inputs, num_neurons) * scale
+    return BE.xp.random.randn(num_inputs, num_neurons) * scale
 
 def xavier_init(num_inputs, num_neurons):
     """
@@ -26,9 +28,9 @@ def xavier_init(num_inputs, num_neurons):
     :num_inputs: Number of inputs of the layer.
     :num_neurons: Number of neurons of the layer.
     """
-    stddev = np.sqrt(2/(num_inputs + num_neurons))
+    stddev = BE.xp.sqrt(2/(num_inputs + num_neurons))
 
-    return np.random.randn(num_inputs, num_neurons) * stddev
+    return BE.xp.random.randn(num_inputs, num_neurons) * stddev
 
 def he_init(num_inputs, num_neurons):
     """
@@ -40,6 +42,6 @@ def he_init(num_inputs, num_neurons):
     :num_inputs: Number of inputs of the layer.
     :num_neurons: Number of neurons of the layer.
     """
-    limit = np.sqrt(6/num_inputs)
+    limit = BE.xp.sqrt(6/num_inputs)
 
-    return np.random.uniform(-limit, limit, (num_inputs, num_neurons))
+    return BE.xp.random.uniform(-limit, limit, (num_inputs, num_neurons))

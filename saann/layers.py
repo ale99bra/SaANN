@@ -5,6 +5,7 @@
 import numpy as np
 from . import activation_functions as AF
 from . import initiations as In
+from . import backend as BE
 
 # Dense Layer class
 class DenseLayer:
@@ -16,7 +17,7 @@ class DenseLayer:
         - Each neuron has a bias parameter
     """
 
-    def __init__(self, num_inputs, num_neurons, activation_function, init_function, random_scale = 0.01):
+    def __init__(self, extras, num_inputs, num_neurons, activation_function, init_function, random_scale = 0.01):
         """
         Initialize the dense layer.\n
         Parameters
@@ -27,9 +28,19 @@ class DenseLayer:
         :init_function: Initialization function for the weigths: 'random', 'xavier' (or 'glorot') or 'he' (or 'kaiming').\n
         :random_scale: Scale for the 'random' initialization.
         """
+
+        if extras[0]:
+            self.batchnorm = BatchNorm(dim=num_neurons)
+        else:
+            self.batchnorm = No_Batch()
         
-        #self.weights = np.random.rand(num_inputs, num_neurons)*1e-1 #the size is a 2D matrix of the inputs and the nuerons
-        self.biases = np.zeros((1, num_neurons))#a biases VECTOR
+        if extras[1]:
+            self.dropout = Dropout()
+        else:
+            self.dropout = No_Dropout()
+        
+        #self.weights = BE.xp.random.rand(num_inputs, num_neurons)*1e-1 #the size is a 2D matrix of the inputs and the nuerons
+        self.biases = BE.xp.zeros((1, num_neurons))#a biases VECTOR
 
         if init_function == "random":
             self.weights = In.random_scaled_init(num_inputs=num_inputs, num_neurons=num_neurons, scale=random_scale)
@@ -65,9 +76,11 @@ class DenseLayer:
         
         self.inputs = inputs
 
-        self.weighted_sum = np.dot(self.inputs, self.weights)
+        self.weighted_sum = BE.xp.dot(self.inputs, self.weights)
 
         raw_output = self.weighted_sum + self.biases
+        
+        raw_output = self.batchnorm.forward(raw_output)
 
         if self.activation == "sigmoid":
             self.output = AF.sigmoid(raw_output)
@@ -87,6 +100,8 @@ class DenseLayer:
         else:
             raise ValueError(f"Activation function '{self.activation}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', 'softmax' or 'linear'.")
 
+        self.output = self.dropout.forward(self.output)
+
         return self.output
     
     def backward(self, d_loss_wrt_output, wd):
@@ -96,24 +111,117 @@ class DenseLayer:
         ----------
         :d_loss_wrt_output: Gradient of the loss with respect to this layer's output
         """
+        d_loss_wrt_output = self.dropout.backward(d_loss_wrt_output)
+
         if self.activation == "softmax":
             d_activation_output = d_loss_wrt_output
         else:
             d_activation_output = d_loss_wrt_output * self.d_output #gradient of loss w.r.t. pre-activation output
+        
+        d_activation_output = self.batchnorm.backward(d_activation_output)
 
         batch_size = self.inputs.shape[0]
 
-        self.d_weights = np.dot(self.inputs.T, d_activation_output) / batch_size # gradient of loss w.r.t. weights
-        self.d_biases = np.sum(d_activation_output, axis=0, keepdims=True) / batch_size # gradient of loss w.r.t. biases
+        self.d_weights = BE.xp.dot(self.inputs.T, d_activation_output) / batch_size # gradient of loss w.r.t. weights
+        self.d_biases = BE.xp.sum(d_activation_output, axis=0, keepdims=True) / batch_size # gradient of loss w.r.t. biases
 
         self.d_weights += 2 * wd * self.weights
 
-        self.d_weights = np.clip(self.d_weights, -1, 1)
-        self.d_biases = np.clip(self.d_biases, -1, 1)
+        """self.d_weights = BE.xp.clip(self.d_weights, -1, 1)
+        self.d_biases = BE.xp.clip(self.d_biases, -1, 1)"""
 
-        d_loss_wrt_prev_output = np.dot(d_activation_output, self.weights.T)
+        d_loss_wrt_prev_output = BE.xp.dot(d_activation_output, self.weights.T)
 
         return d_loss_wrt_prev_output
+    
+class No_Batch:
+    def __init__(self):
+        pass
+
+    def forward(self, X, training=True):
+        return X
+    
+    def backward(self, d_out):
+        return d_out
+    
+    def update(self, lr):
+        pass
+
+class No_Dropout:
+    def __init__(self, p=0.5):
+        pass
+
+    def forward(self, X, training=True):
+        return X
+        
+    def backward(self, d_out):
+        return d_out
+    
+class BatchNorm:
+    def __init__(self, dim, eps=1e-5, momentum=0.9):
+        self.eps = eps
+        self.momentum = momentum
+
+        # Learnable parameters
+        self.gamma = BE.xp.ones((1, dim))
+        self.beta  = BE.xp.zeros((1, dim))
+
+        # Running stats (for inference)
+        self.running_mean = BE.xp.zeros((1, dim))
+        self.running_var  = BE.xp.ones((1, dim))
+
+    def forward(self, X, training=True):
+        if training:
+            self.mu = BE.xp.mean(X, axis=0, keepdims=True)
+            self.var = BE.xp.var(X, axis=0, keepdims=True)
+
+            self.x_norm = (X - self.mu) / BE.xp.sqrt(self.var + self.eps)
+            out = self.gamma * self.x_norm + self.beta
+
+            # Update running stats
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * self.mu
+            self.running_var  = self.momentum * self.running_var  + (1 - self.momentum) * self.var
+        else:
+            # Use running stats at inference
+            x_norm = (X - self.running_mean) / BE.xp.sqrt(self.running_var + self.eps)
+            out = self.gamma * x_norm + self.beta
+
+        self.X = X
+        return out
+    
+    def backward(self, d_out):
+        N, D = d_out.shape
+
+        # Gradients for gamma and beta
+        self.d_gamma = BE.xp.sum(d_out * self.x_norm, axis=0, keepdims=True)
+        self.d_beta  = BE.xp.sum(d_out, axis=0, keepdims=True)
+
+        # Backprop through normalization
+        dx_norm = d_out * self.gamma
+        dvar = BE.xp.sum(dx_norm * (self.X - self.mu) * -0.5 * (self.var + self.eps)**(-3/2), axis=0)
+        dmu = BE.xp.sum(dx_norm * -1 / BE.xp.sqrt(self.var + self.eps), axis=0) + dvar * BE.xp.mean(-2 * (self.X - self.mu), axis=0)
+
+        dX = dx_norm / BE.xp.sqrt(self.var + self.eps) + dvar * 2 * (self.X - self.mu) / N + dmu / N
+
+        return dX
+    
+    def update(self, lr):
+        self.gamma -= lr * self.d_gamma
+        self.beta  -= lr * self.d_beta
+
+class Dropout:
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def forward(self, X, training=True):
+        if training:
+            self.mask = (BE.xp.random.rand(*X.shape) > self.p) / (1 - self.p)
+            return X * self.mask
+        else:
+            return X
+        
+    def backward(self, d_out):
+        return d_out * self.mask
 
 # Multi-Layer Perceptron class
 class MLP:
@@ -123,7 +231,7 @@ class MLP:
         - 1+ hidden layers (intermediate computations)
         - output layer (final results)
     """
-    def __init__(self, layers_info):
+    def __init__(self, layers_info, batch_norm = False, dropout = False):
         """
         Initialize the Multi-Layer Perceptron.\n
         Parameters
@@ -131,6 +239,7 @@ class MLP:
         :layer_info: Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
         """
         self.layers = []
+        self.extras = [batch_norm, dropout]
 
         self.add_layers(layers_info)
 
@@ -153,7 +262,7 @@ class MLP:
 
         #Create layers
         for n_inputs, n_neurons, activation, initialization in layers_info:
-            self.layers.append(DenseLayer(num_inputs=n_inputs, num_neurons=n_neurons, activation_function=activation.lower(), init_function=initialization.lower()))
+            self.layers.append(DenseLayer(extras = self.extras, num_inputs=n_inputs, num_neurons=n_neurons, activation_function=activation.lower(), init_function=initialization.lower()))
 
     def forward(self, inputs):
         """

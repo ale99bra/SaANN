@@ -10,6 +10,67 @@ from .layers import MLP, DenseLayer
 from .processing import Scaling, train_test_split
 import warnings
 import matplotlib.pyplot as plt
+from . import activation_functions as AF
+from . import initiations as In
+from . import backend as BE
+
+def im2col(X, K, stride, padding):
+    B, H, W, C = X.shape
+
+    # Pad input
+    X_padded = BE.xp.pad(X,
+                      ((0,0), (padding,padding), (padding,padding), (0,0)),
+                      mode='constant')
+
+
+    H_p, W_p = X_padded.shape[1], X_padded.shape[2]
+
+    H_out = (H_p - K) // stride + 1
+    W_out = (W_p - K) // stride + 1
+    
+    shape = (B, H_out, W_out, K, K, C)
+    strides = (
+        X_padded.strides[0],
+        stride * X_padded.strides[1],
+        stride * X_padded.strides[2],
+        X_padded.strides[1],
+        X_padded.strides[2],
+        X_padded.strides[3],
+    )
+
+    #cols = cols.reshape(B * H_out * W_out, K*K*C)
+    #return cols, H_out, W_out
+
+    X_strided = BE.xp.lib.stride_tricks.as_strided(
+        X_padded, shape=shape, strides=strides
+    )
+
+    # Reshape to im2col matrix
+    X_col = X_strided.reshape(B * H_out * W_out, K * K * C)
+    return X_col, H_out, W_out
+
+def col2im(dX_col, X_shape, K, stride=1, padding=0, H_out=None, W_out=None):
+    B, H, W, C = X_shape
+
+    # Initialize padded gradient
+    dX_padded = BE.xp.zeros((B, H + 2*padding, W + 2*padding, C), dtype=dX_col.dtype)
+
+    dX_strided = dX_col.reshape(B, H_out, W_out, K, K, C)
+
+    for i in range(K):
+        for j in range(K):
+            dX_padded[:, 
+                      i:i + H_out*stride:stride,
+                      j:j + W_out*stride:stride,
+                      :] += dX_strided[:, :, :, i, j, :]
+
+    # Remove padding
+    if padding > 0:
+        return dX_padded[:, padding:-padding, padding:-padding, :]
+    return dX_padded
+
+
+
 
 class SequentialModel:
     """
@@ -55,7 +116,7 @@ class SequentialModel:
         self.optiomizer = None
         self.learning_rate = None
 
-    def construct(self, layers_info, learning_rate = 0.01):
+    def construct(self, layers_info, learning_rate = 0.01, batch_norm = False, dropout = False):
         """
         Constructs the Dense Layers of the Neural Network while initializing the SGD optimizer.\n
         Parameters
@@ -69,7 +130,7 @@ class SequentialModel:
         >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
         >>> model.construct(ly_info, learning_rate=0.2)
         """
-        self.mlp = MLP(layers_info)
+        self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
 
@@ -78,13 +139,14 @@ class SequentialModel:
         Performs the train loop for each epoch.\n
         Parameters
         ----------
-        :params epochs: Number of epochs\n
-        :params batch_size: Size of each batch\n
         :params X_train: X split for the training\n
         :params y_train: y split for the training\n
+        :params epochs: Number of epochs\n
+        :params batch_size: Size of each batch\n
         :params batch_size: Size of each batch\n
         :params wd: Hyperparameter for the model regularization (weight decay)\n
         :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
+            N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: Display the Loss graph at the end of the fitting\n
         :params real_time: Display the Loss graph in real time\n
         :params log_plot: Display the Loss graph in semilogy scale
@@ -144,7 +206,7 @@ class SequentialModel:
 
         for epoch in range(epochs):
             # Shuffle the data at the beginning of each epoch
-            idx = np.random.permutation(num_samples)
+            idx = BE.xp.random.permutation(num_samples)
             X_shuffled = X_train[idx]
             y_shuffled = y_train[idx]
             
@@ -162,7 +224,7 @@ class SequentialModel:
                 except:
                     loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
 
-                tot_loss += np.mean(loss)
+                tot_loss += BE.xp.mean(loss)
                 
                 try:
                     d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
@@ -182,8 +244,8 @@ class SequentialModel:
                 loss_list.append(avg_loss)
             if real_time:
                 plt.clf()
-                if log_plot: plt.semilogy(np.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-                else: plt.plot(np.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+                if log_plot: plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+                else: plt.plot(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
                 plt.title(f"Average loss (over the {num_batches} batches) over the epochs (current: {epoch})")
                 plt.xlabel("Epoch")
                 plt.ylabel("Average loss")
@@ -196,13 +258,13 @@ class SequentialModel:
             self.final_loss = self.loss_func(y_train, self.final_pred)
         except:
             self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
-        if self.mlp.layers[-1].activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {np.mean(self.final_loss):.5f}")
+        if self.mlp.layers[-1].activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
         else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
         if graphical:
             plt.clf()
             if real_time:plt.ioff()
-            if log_plot:plt.semilogy(np.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-            else: plt.plot(np.arange(1, epochs+1, step = 1), loss_list, linestyle = '-')
+            if log_plot:plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+            else: plt.plot(BE.xp.arange(1, epochs+1, step = 1), loss_list, linestyle = '-')
             plt.title(f"Average loss (over the {num_batches} batches) over the epochs")
             plt.xlabel("Epoch")
             plt.ylabel("Average loss")
@@ -232,7 +294,7 @@ class SequentialModel:
         y_pred = self.mlp.forward(X_test)
         return y_pred
     
-    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
+    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, batch_norm = False, dropout = False, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
         """
         Performs the *construction*, *fitting* and *prediction* based on the parameters given.\n
         Parameters
@@ -247,6 +309,8 @@ class SequentialModel:
         :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
         :param split_test_percentage: Percentage of the total array size used to obtain the Test arrays.\n
         :param scaling: Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
+        :param batch_norm: *bool* - Include batch normalization to the MLP architecture.\n
+        :param dropout: *bool* - Include dropout to the MLP architecture.\n
         :param graphical: Display the Loss graph at the end of the fitting.\n
         :param real_time: Display the Loss graph in real time.\n
         :param log_plot: Display the Loss graph in semilogy scale\n
@@ -290,11 +354,11 @@ class SequentialModel:
         X_train, X_test, y_train, y_test = train_test_split(X, y, split_test_percentage)
         print(f"Split of the Train (len:{len(X_train)}) and Test (len:{len(X_test)}) completed.\n")
 
-        if scaling != None and learning_rate >= np.std(tmp):
-            sc_down = int(np.ceil(learning_rate/np.std(tmp) * 100))
+        if scaling != None and learning_rate >= BE.xp.std(tmp):
+            sc_down = int(BE.xp.ceil(learning_rate/BE.xp.std(tmp) * 100))
             warnings.warn(f"Learning rate might be too high for the scaled data. It is recommended to reduce it by a factor x{sc_down}")
 
-        self.construct(layers_info=layers_info, learning_rate=learning_rate)
+        self.construct(layers_info=layers_info, learning_rate=learning_rate, batch_norm=batch_norm, dropout=dropout)
         final_pred_train = self.fit(X_train=X_train, y_train=y_train, epochs=epochs, batch_size=batch_size, wd=wd, loss_function=loss_function, graphical=graphical, real_time=real_time, log_plot=log_plot)
         y_pred = self.predict(X_test=X_test)
         if test_loss:
@@ -303,21 +367,21 @@ class SequentialModel:
             except:
                 test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred, delta=self.delta)
             if self.loss_func != losses.cross_entropy: print(f"\n'{loss_function}' loss function result of Test vs. Predicted: {test_loss_value:2g}")
-            else: print(f"\n'cross-entropy' loss function result of Test vs. Predicted: {np.mean(test_loss_value):2g}")
+            else: print(f"\n'cross-entropy' loss function result of Test vs. Predicted: {BE.xp.mean(test_loss_value):2g}")
         if scatter_comparison:
             try:
                 plt.scatter(x=y_pred, y=y_test)
                 plt.title("Test data vs. Predicted data")
                 plt.ylabel("Test")
                 plt.xlabel("Prediction")
-                if np.min(y_pred) < np.min(y_test):
-                    limit_min = np.min(y_pred)
+                if BE.xp.min(y_pred) < BE.xp.min(y_test):
+                    limit_min = BE.xp.min(y_pred)
                 else:
-                    limit_min = np.min(y_test)
-                if np.max(y_pred) > np.max(y_test):
-                    limit_max = np.max(y_pred)
+                    limit_min = BE.xp.min(y_test)
+                if BE.xp.max(y_pred) > BE.xp.max(y_test):
+                    limit_max = BE.xp.max(y_pred)
                 else:
-                    limit_max = np.max(y_test)
+                    limit_max = BE.xp.max(y_test)
                 plt.xlim(limit_min*0.85, limit_max + (limit_min*0.15))
                 plt.ylim(limit_min*0.85, limit_max + (limit_min*0.15))
                 plt.show()
@@ -326,3 +390,626 @@ class SequentialModel:
             
 
         return y_pred, final_pred_train, X_train, X_test, y_train, y_test
+
+
+
+class BatchNorm2D:
+    def __init__(self, num_channels, eps=1e-5, momentum=0.9):
+        self.eps = eps
+        self.momentum = momentum
+
+        self.gamma = BE.xp.ones((1, 1, 1, num_channels))
+        self.beta  = BE.xp.zeros((1, 1, 1, num_channels))
+
+        self.running_mean = BE.xp.zeros((1, 1, 1, num_channels))
+        self.running_var  = BE.xp.ones((1, 1, 1, num_channels))
+
+    def forward(self, X, training=True):
+        if training:
+            # mean/var over batch + spatial dims
+            self.mu = BE.xp.mean(X, axis=(0,1,2), keepdims=True)
+            self.var = BE.xp.var(X, axis=(0,1,2), keepdims=True)
+
+            self.x_norm = (X - self.mu) / BE.xp.sqrt(self.var + self.eps)
+            out = self.gamma * self.x_norm + self.beta
+
+            # update running stats
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * self.mu
+            self.running_var  = self.momentum * self.running_var  + (1 - self.momentum) * self.var
+        else:
+            x_norm = (X - self.running_mean) / BE.xp.sqrt(self.running_var + self.eps)
+            out = self.gamma * x_norm + self.beta
+
+        self.X = X
+        return out
+            
+    def backward(self, d_out):
+        B, H, W, C = d_out.shape
+        N = B * H * W  # number of elements per channel
+
+        # gradients for gamma and beta
+        self.d_gamma = BE.xp.sum(d_out * self.x_norm, axis=(0,1,2), keepdims=True)
+        self.d_beta  = BE.xp.sum(d_out, axis=(0,1,2), keepdims=True)
+
+        dx_norm = d_out * self.gamma
+
+        dvar = BE.xp.sum(dx_norm * (self.X - self.mu) * -0.5 * (self.var + self.eps)**(-3/2),
+                    axis=(0,1,2), keepdims=True)
+
+        dmu = (BE.xp.sum(dx_norm * -1 / BE.xp.sqrt(self.var + self.eps),
+                    axis=(0,1,2), keepdims=True)
+            + dvar * BE.xp.mean(-2 * (self.X - self.mu), axis=(0,1,2), keepdims=True))
+
+        dX = (dx_norm / BE.xp.sqrt(self.var + self.eps)
+            + dvar * 2 * (self.X - self.mu) / N
+            + dmu / N)
+                
+        return dX
+            
+    def update(self, lr):
+        self.gamma -= lr * self.d_gamma
+        self.beta  -= lr * self.d_beta
+
+class CNN:
+    """
+    Initialize the Convolution model.\n
+    This model combines convolutional layers, max-pooling, batch normalization, and dropout, followed by a fully connected Multi-Layer Perceptron (MLP) classifier
+    
+    Parameters
+    ----------
+    :param filter_size: *int* - Size of the (square) filter used in the convolution layers. Default is 3
+    :param num_filters: *int* - Number of filters used in the convolution layers. Default is 4
+    :param padding: *int* - Amount of padding applied to the array for each convolution layer. Default is 1
+    :param stride: *int* - Amount of strading applied to the array for each convolution layer. Default is 1
+    :param activation_function: *str* - Activation function used for the convolution layers. Default is 'relu'
+    :param init_function: *str* - Initiation function used for the weights of each convolution layer. Default is 'he'
+    :param num_channels: *int* - Number of color channels in the images uploaded. Default is 3
+    :param pool_size: *int* - Size of the max-pooling applied. Default is 2
+   
+    Example
+    ----------
+
+    **1. Initialize the model:**
+        >>> model_cnn = CNN(filter_size = 3, num_filters = 16, padding = 1, stride = 1, activation_function = "relu", init_function = "he")
+
+
+    **2. Gather the size of the input for the layer specification:**
+
+        >>> input_size = model_cnn.get_input_size(X_train=X_train)
+
+    **3. Define layer specifications (inputs, neurons, activation, initialization):**
+        
+        >>> layer_info = [
+            (input_size, 256, 'relu', 'he'),
+            (256, 128, 'relu', 'he'),
+            (128, y_train.shape[1], 'softmax', 'he')
+        ]
+    
+    Be aware that for classification models, the last layer needs to follow the rule (n_input, y_train.shape[1], 'softmax', 'he')
+    
+    **4. Build the network:**
+
+        >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
+
+    **5. Train the model:**
+
+        >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
+    
+    **6. Predict outputs:**
+
+        >>> y_pred = model_cnn.predict(X_test)
+    """
+
+    def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2):
+        self.mlp = None
+        self.optimizer = None
+        self.batchnorm = None
+        self.dropout = None
+        self.learning_rate = None
+        self.filter_size = filter_size
+        self.stride = stride
+        self.padding = padding
+        self.activation_function = activation_function
+        self.init_function = init_function
+        self.num_filters = num_filters
+        self.og_params_conv = [self.filter_size, self.num_filters, self.padding, self.stride]
+
+        params_int = [filter_size, num_filters, padding, stride, num_channels, pool_size]
+        params_label = ["filter_size"," num_filters", "padding", "stride", "num_channels", "pool_size"]
+
+        for p in range(len(params_int)):
+            if not isinstance(params_int[p], int):
+                raise ValueError(f"Parameter '{params_label[p]}' of the CNN class must be an integer.")
+        
+        try:
+            if activation_function.lower() not in ['sigmoid', 'relu', 'tanh', 'linear']:
+                raise ValueError(f"Activation function for convolution '{activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', or 'linear'.")
+        except:
+            raise ValueError(f"Activation function for convolution '{activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', or 'linear'.")
+
+        """if self.init_function == "random":
+            self.weights = BE.xp.random.rand(self.num_filters, self.filter_size, self.filter_size, num_channels) * 0.01
+        elif self.init_function in ("xavier", "glorot"):
+            stddev = BE.xp.sqrt(2/(self.num_filters + num_channels))
+            self.weights = BE.xp.random.randn(self.num_filters, self.filter_size, self.filter_size, num_channels) * stddev
+        elif self.init_function in ("he", "kaiming"):
+            limit = BE.xp.sqrt(6/self.num_filters)
+            self.weights = BE.xp.random.uniform(-limit, limit, (self.num_filters, self.filter_size, self.filter_size, num_channels))
+        else:
+            raise ValueError(f"Initialization function '{self.init_function}' not found.\nPlease choose: 'random', 'xavier' or 'he'.")
+            
+        self.biases = BE.xp.random.rand(self.num_filters) * 0"""
+
+        self.conv1a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = num_channels, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
+        self.conv2a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
+        self.conv3a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 4*num_filters, padding = padding, stride = stride, num_channels = 2*num_filters, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
+
+        self.conv1b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
+        self.conv2b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 2*num_filters, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
+        self.conv3b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 4*num_filters, padding = padding, stride = stride, num_channels = 4*num_filters, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
+
+    def construct(self, layers_info, learning_rate = 0.01, batch_norm = True, dropout = True):
+        """
+        Constructs the Dense Layers of the Neural Network while initializing the SGD optimizer.\n
+        Parameters
+        ----------
+        :param layer_info: Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
+        :param learning_rate: Hyperparameter that controls the step size.\n
+        :param batch_norm: *bool* - Include batch normalization to the MLP architecture.\n
+        :param dropout: *bool* - Include dropout to the MLP architecture.\n
+
+        Example
+        -------
+            >>> model = SequentialModel()
+        >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
+        >>> model.construct(ly_info, learning_rate=0.2)
+        """
+        self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
+        self.optimizer = SGD(learning_rate)
+        self.learning_rate = learning_rate
+
+
+    class ConvolutionLayer:
+
+        def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2):
+            self.mlp = None
+            self.optiomizer = None
+            self.learning_rate = None
+            self.filter_size = filter_size
+            self.stride = stride
+            self.padding = padding
+            self.activation_function = activation_function
+            self.init_function = init_function
+            self.num_filters = num_filters
+            self.og_params_conv = [self.filter_size, self.num_filters, self.padding, self.stride]
+
+            self.bn = BatchNorm2D(num_channels=num_filters)
+
+            if self.init_function == "random":
+                self.weights = BE.xp.random.rand(self.num_filters, self.filter_size, self.filter_size, num_channels) * 0.01
+            elif self.init_function in ("xavier", "glorot"):
+                stddev = BE.xp.sqrt(2/(self.num_filters + num_channels))
+                self.weights = BE.xp.random.randn(self.num_filters, self.filter_size, self.filter_size, num_channels) * stddev
+            elif self.init_function in ("he", "kaiming"):
+                fan_in = self.filter_size * self.filter_size * num_channels
+                limit = BE.xp.sqrt(6.0 / fan_in)
+                self.weights = BE.xp.random.uniform(-limit, limit,
+                                                (self.num_filters, self.filter_size,
+                                                self.filter_size, num_channels))
+            else:
+                raise ValueError(f"Initialization function '{self.init_function}' not found.\nPlease choose: 'random', 'xavier' or 'he'.")
+                
+            self.biases = BE.xp.random.rand(self.num_filters) * 0
+
+        def forward(self, X):
+            batch_size, im_h, im_w, num_channels = X.shape
+
+            if im_w <= im_h: min_size = im_w
+            else: min_size = im_h
+            if self.filter_size > min_size: raise ValueError(f"Filter size ({self.filter_size}) too large. Please reduce it below {min_size}")
+
+            layer_conv = self.conv_forward_im2col(
+                X = X,
+                W = self.weights,
+                b = self.biases,
+                stride = self.stride,
+                padding = self.padding
+            )
+
+            layer_conv = self.bn.forward(layer_conv, training=True)
+
+            if self.activation_function == "sigmoid":
+                self.layer_conv = AF.sigmoid(layer_conv)
+            elif self.activation_function == "relu":
+                self.layer_conv = AF.reLU(layer_conv)
+            elif self.activation_function == "linear":
+                self.layer_conv = AF.linear(layer_conv)
+            elif self.activation_function == "tanh":
+                self.layer_conv = AF.tanh(layer_conv)
+            else:
+                raise ValueError(f"Activation function for convolution'{self.activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', or 'linear'.")
+            
+            return self.layer_conv
+
+        def conv_forward_im2col(self, X, W, b, stride, padding):
+            K = W.shape[1]
+            X_col, H_out, W_out = im2col(X, K, stride, padding)
+            W_col = W.reshape(self.num_filters, -1)
+
+            self.cache = (X, X_col, W, W_col, stride, padding, H_out, W_out)
+
+            out = X_col @ W_col.T + b  # (B*H_out*W_out, num_filters)
+            out = out.reshape(X.shape[0], H_out, W_out, self.num_filters)
+
+            return out
+        
+        def backward(self, d_out):
+            d_out = self.bn.backward(d_out)
+
+            dX, dW, db = self.conv_backward_im2col(d_out)
+
+            self.d_weights = dW
+            self.d_biases = db
+
+            return dX
+        
+        def conv_backward_im2col(self, d_out):
+            X, X_col, W, W_col, stride, padding, H_out, W_out = self.cache
+            B = X.shape[0]
+            K = W.shape[1]
+
+            d_out_col = d_out.reshape(B*H_out*W_out, self.num_filters)
+
+            #print("d_out_col max:", BE.xp.max(BE.xp.abs(d_out_col)))
+
+            # Gradients
+            dW_col = d_out_col.T @ X_col
+            db = BE.xp.sum(d_out_col, axis=0)
+
+            num_positions = B * H_out * W_out
+
+            dW_col = dW_col / num_positions
+            db = db / num_positions
+
+            dW = dW_col.reshape(W.shape)
+
+            dX_col = d_out_col @ W_col
+
+            #print("dX_col max:", BE.xp.max(BE.xp.abs(dX_col)))
+
+            dX = col2im(dX_col, X.shape, K, stride, padding, H_out=H_out, W_out=W_out)
+
+            #print("dX max:", BE.xp.max(BE.xp.abs(dX)))
+            
+            return dX, dW, db
+        
+        def maxpool_forward(self, X, pool_size, stride):
+            B, H, W, C = X.shape
+
+            H_out = (H - pool_size) // stride + 1
+            W_out = (W - pool_size) // stride + 1
+
+            out = BE.xp.zeros((B, H_out, W_out, C))
+            self.maxpool_cache = (X, pool_size, stride)
+
+            for h in range(H_out):
+                for w in range(W_out):
+                    h_start = h * stride
+                    w_start = w * stride
+
+                    window = X[:, 
+                            h_start:h_start+pool_size,
+                            w_start:w_start+pool_size,
+                            :]
+
+                    out[:, h, w, :] = BE.xp.max(window, axis=(1, 2))
+
+            return out
+            
+        def maxpool_backward(self, d_out):
+            X, pool_size, stride = self.maxpool_cache
+            B, H, W, C = X.shape
+
+            H_out = d_out.shape[1]
+            W_out = d_out.shape[2]
+
+            dX = BE.xp.zeros_like(X)
+
+            for h in range(H_out):
+                for w in range(W_out):
+                    h_start = h * stride
+                    w_start = w * stride
+
+                    window = X[:, 
+                            h_start:h_start+pool_size,
+                            w_start:w_start+pool_size,
+                            :]
+
+                    max_vals = BE.xp.max(window, axis=(1, 2), keepdims=True)
+                    mask = (window == max_vals)
+
+                    dX[:, 
+                    h_start:h_start+pool_size,
+                    w_start:w_start+pool_size,
+                    :] += mask * d_out[:, h:h+1, w:w+1, :]
+
+            return dX
+        
+        def update(self, lr, wd):
+            self.bn.update(lr)
+            self.weights -= lr * (self.d_weights + wd * self.weights)
+            self.biases  -= lr * self.d_biases
+            self.weights = self.weights.astype(BE.xp.float32)
+            self.biases = self.biases.astype(BE.xp.float32)
+            self.d_weights = BE.xp.zeros_like(self.weights)
+            self.d_biases  = BE.xp.zeros_like(self.biases)
+    
+    def ConvolutionBlock(self, X):
+        X = self.conv1a.forward(X)
+        X = self.conv1b.forward(X)
+        X = self.conv1b.maxpool_forward(X, 2, 2)
+
+        X = self.conv2a.forward(X)
+        X = self.conv2b.forward(X)
+        X = self.conv2b.maxpool_forward(X, 2, 2)
+
+        X = self.conv3a.forward(X)
+        X = self.conv3b.forward(X)
+        X = self.conv3b.maxpool_forward(X, 2, 2)
+
+        return X
+    
+    def ConvolutionBackward(self, d):
+        # Backprop through Conv3 block
+        d = self.conv3b.maxpool_backward(d)
+        d = self.conv3b.backward(d)
+        d = self.conv3a.backward(d)
+
+        # Backprop through Conv2 block
+        d = self.conv2b.maxpool_backward(d)
+        d = self.conv2b.backward(d)
+        d = self.conv2a.backward(d)
+
+        # Backprop through Conv1 block
+        d = self.conv1b.maxpool_backward(d)
+        d = self.conv1b.backward(d)
+        d = self.conv1a.backward(d)
+
+
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, graphical = False, real_time = False, log_plot = False):
+        """
+        Performs the train loop for each epoch.\n
+        Parameters
+        ----------
+        :params X_train: X split for the training\n
+        :params y_train: y split for the training\n
+        :params epochs: Number of epochs\n
+        :params batch_size: Size of each batch\n
+        :params batch_size: Size of each batch\n
+        :params wd: Hyperparameter for the model regularization (weight decay)\n
+        :params graphical: Display the Loss graph at the end of the fitting\n
+        :params real_time: Display the Loss graph in real time\n
+        :params log_plot: Display the Loss graph in semilogy scale
+
+        N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
+
+
+        Returns
+        -------
+        :return final_pred_train: Final prediction during training
+
+        Example
+        -------
+            >>> model_cnn = CNN(filter_size = 3, num_filters = 16, padding = 1, stride = 1, activation_function = "relu", init_function = "he")
+        >>> input_size = model_cnn.get_input_size(X_train=X_train)
+        >>> layer_info = [
+            (input_size, 256, 'relu', 'he'),
+            (256, 128, 'relu', 'he'),
+            (128, y_train.shape[1], 'softmax', 'he')
+        ]
+        >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
+        >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
+        """
+
+        num_samples = X_train.shape[0]
+        num_samples = len(X_train)
+        num_batches = (num_samples + batch_size - 1) // batch_size
+
+        """
+
+        try:
+            tmp = loss_function.split(sep=':')
+            self.delta = float(tmp[1])
+            loss_function = tmp[0]
+        except:
+            loss_function = tmp[0]
+            self.delta = 1
+        """
+        
+        self.loss_func = losses.cross_entropy
+        self.loss_gradient = losses.cross_entropy_der
+
+        """
+        if self.mlp.layers[-1].activation == "softmax":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+        elif loss_function.lower() == "mse":
+            self.loss_func = losses.MSE
+            self.loss_gradient = losses.MSE_der
+        elif loss_function.lower() == "mae":
+            self.loss_func = losses.MAE
+            self.loss_gradient = losses.MAE_der
+        elif loss_function.lower() == "huber":
+            self.loss_func = losses.Huber
+            self.loss_gradient = losses.Huber_der
+        else:
+            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
+        """
+
+        if real_time == True and graphical == False:
+            warnings.warn("The parameter graphical is set to False while real_time is True. Assuming graphical = True.")
+            graphical = True
+
+        if graphical:
+            loss_list = []
+        if real_time:
+            plt.figure()
+            plt.ion()
+
+        print(f"Training for {epochs} Epochs with learning rate: {self.learning_rate:.2g}")
+
+        for epoch in range(epochs):
+            # Shuffle the data at the beginning of each epoch
+            idx = BE.xp.random.permutation(num_samples)
+            X_shuffled = X_train[idx]
+            y_shuffled = y_train[idx]
+            
+            tot_loss = 0
+            
+            # Process data in mini-batches
+            for i in range(0, num_samples, batch_size):
+                X_batch = X_shuffled[i:i+batch_size]
+                y_batch = y_shuffled[i:i+batch_size]
+
+                batch_conv_outputs_flat = []
+                
+                conv_out = self.ConvolutionBlock(X=X_batch)
+
+                for out in conv_out:    
+                    batch_conv_outputs_flat.append(out.flatten())
+                batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)
+
+                y_pred = self.mlp.forward(batch_conv_outputs_flat)
+                
+                try:
+                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
+                except:
+                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
+
+                tot_loss += BE.xp.mean(loss)
+                
+                try:
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
+                except:
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
+
+                d_mlp = self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred, wd=wd)
+
+                d_conv_input = d_mlp.reshape(conv_out.shape[0], *conv_out.shape[1:])
+
+                self.ConvolutionBackward(d=d_conv_input)
+
+                for layer in self.mlp.layers:
+                    self.optimizer.update(layer)                
+                
+            # Average loss over all batches for reporting
+            avg_loss = tot_loss / num_batches
+            if (epoch + 1) % (epochs // 10 if epochs >=10 else 1) == 0 or epoch == 0:
+                print(f"Epoch {epoch+1:4d}/{epochs}, Loss: {avg_loss:.5f}")
+            if graphical:
+                loss_list.append(avg_loss)
+            if real_time:
+                plt.clf()
+                if log_plot: plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+                else: plt.plot(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+                plt.title(f"Average loss (over the {num_batches} batches) over the epochs (current: {epoch})")
+                plt.xlabel("Epoch")
+                plt.ylabel("Average loss")
+                plt.pause(5e-3)
+
+        batch_conv_outputs_flat = []
+        
+        conv_out = self.ConvolutionBlock(X=X_train)
+        for out in conv_out:
+            batch_conv_outputs_flat.append(out.flatten())
+        batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat) 
+        self.final_pred = self.mlp.forward(batch_conv_outputs_flat)
+
+        try:
+            self.final_loss = self.loss_func(y_train, self.final_pred)
+        except:
+            self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
+        
+        print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
+
+        """
+        if self.mlp.layers[-1].activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
+        else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")"""
+
+        if graphical:
+            plt.clf()
+            if real_time:plt.ioff()
+            if log_plot:plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
+            else: plt.plot(BE.xp.arange(1, epochs+1, step = 1), loss_list, linestyle = '-')
+            plt.title(f"Average loss (over the {num_batches} batches) over the epochs")
+            plt.xlabel("Epoch")
+            plt.ylabel("Average loss")
+            plt.show()
+
+        return self.final_pred
+    
+    def predict(self, X_test):
+        """
+        Make predictions using the testing features.\n
+        Parameter
+        ---------
+        :param X_test: Data array used for the testing of the model.
+
+        Return
+        ------
+        :return y_pred: Prediction array
+
+        Example
+        -------
+            >>> model_cnn = CNN(filter_size = 3, num_filters = 16, padding = 1, stride = 1, activation_function = "relu", init_function = "he")
+        >>> input_size = model_cnn.get_input_size(X_train=X_train)
+        >>> layer_info = [
+            (input_size, 256, 'relu', 'he'),
+            (256, 128, 'relu', 'he'),
+            (128, y_train.shape[1], 'softmax', 'he')
+        ]
+        >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
+        >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
+        >>> y_pred = model_cnn.predict(X_test=X_train)
+        """
+        batch_conv_outputs_flat = []
+        conv_out = self.ConvolutionBlock(X=X_test)
+        for out in conv_out:
+            batch_conv_outputs_flat.append(out.flatten())       
+        batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)
+
+        y_pred = self.mlp.forward(batch_conv_outputs_flat)
+        return y_pred
+  
+    def get_input_size(self, X_train):
+        """
+        Gathers the size of the input of the first layer.\n
+        Parameter
+        ---------
+        :param X_train: *ndarray* Data array used for the training of the model.
+
+        Return
+        ------
+        :return in_size: Size of the input array
+
+        Example
+        -------
+            >>> model_cnn = CNN(filter_size = 3, num_filters = 16, padding = 1, stride = 1, activation_function = "relu", init_function = "he")
+        >>> input_size = model_cnn.get_input_size(X_train=X_train)
+        >>> layer_info = [
+            (input_size, 256, 'relu', 'he'),
+            (256, 128, 'relu', 'he'),
+            (128, y_train.shape[1], 'softmax', 'he')
+        ]
+        """
+
+        batch_conv_outputs_flat = []
+        
+        conv_out = self.ConvolutionBlock(X=X_train[0:1])
+        for out in conv_out:    
+            batch_conv_outputs_flat.append(out.flatten())
+        batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)
+    
+        in_size = batch_conv_outputs_flat.size
+        
+        return in_size

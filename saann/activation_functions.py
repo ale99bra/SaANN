@@ -3,6 +3,8 @@
 # Licensed under the MIT License
 
 import numpy as np
+from . import backend as BE
+
 
 # Activation functions and their derivatives
 def sigmoid(x):
@@ -12,7 +14,7 @@ def sigmoid(x):
     ---------
     :x: Array.
     """
-    output = 1/(1+np.exp(-x))
+    output = 1/(1+BE.xp.exp(-x))
     return output
 
 def sigmoid_der(f):
@@ -31,7 +33,7 @@ def tanh(x):
     ---------
     :x: Array.
     """
-    return np.tanh(x)
+    return BE.xp.tanh(x)
 
 def tanh_der(f):
     """
@@ -49,7 +51,7 @@ def reLU(x):
     ---------
     :x: Array.
     """
-    return np.maximum(0, x)
+    return BE.xp.maximum(0, x)
 
 def reLU_der(f):
     """
@@ -58,7 +60,7 @@ def reLU_der(f):
     ---------
     :f: Activated output.
     """
-    return np.where(f > 0, 1, 0)
+    return BE.xp.where(f > 0, 1, 0)
 
 def softmax(x):
     """
@@ -67,8 +69,8 @@ def softmax(x):
     ---------
     :x: Array.
     """
-    exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))
-    return exp_x / np.sum(exp_x, axis=1, keepdims=True)
+    exp_x = BE.xp.exp(x - BE.xp.max(x, axis=1, keepdims=True))
+    return exp_x / BE.xp.sum(exp_x, axis=1, keepdims=True)
 
 def softmax_der(f):
     """
@@ -77,7 +79,7 @@ def softmax_der(f):
     ---------
     :f: Activated output.
     """
-    return np.diagflat(f) - np.dot(f, f.T)
+    return BE.xp.diagflat(f) - BE.xp.dot(f, f.T)
 
 def linear(x):
     """
@@ -95,4 +97,4 @@ def linear_der(f):
     ---------
     :f: Activated output.
     """
-    return np.ones_like(f)
+    return BE.xp.ones_like(f)

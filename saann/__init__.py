@@ -6,3 +6,5 @@ from . import layers
 from . import losses
 from . import models
 from . import processing
+from . import metrics
+from . import backend
