@@ -259,7 +259,7 @@ class Metrics:
         if self.y_test.shape[1] > 1:
 
             auc, roc_curve, auc_curve = self.AUC(graphical=False, threshold_step=threshold_step)  
-            print(f"AUC: {auc}")
+            print(f"AUC: {auc:.3f}")
 
             for k in range(self.y_test.shape[1]):
                 ax1.plot(roc_curve[k][0], roc_curve[k][1], label = f"Class {k+1}: AUC = {auc_curve[k]:.3g}")
@@ -272,7 +272,7 @@ class Metrics:
 
         else:
             auc, fpr_sorted, tpr_sorted = self.AUC(graphical=False, threshold_step=5e-3)  
-            print(f"AUC: {auc}")
+            print(f"AUC: {auc:.3f}")
 
             ax1.plot(fpr_sorted, tpr_sorted)
             ax1.set_title(f"ROC curve: AUC = {auc:.3g}")
