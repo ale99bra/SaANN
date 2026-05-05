@@ -642,7 +642,7 @@ class CNN:
 
             self.cache = (X, X_col, W, W_col, stride, padding, H_out, W_out)
 
-            out = X_col @ W_col.T + b  # (B*H_out*W_out, num_filters)
+            out = X_col @ W_col.T + b
             out = out.reshape(X.shape[0], H_out, W_out, self.num_filters)
 
             return out
@@ -821,7 +821,6 @@ class CNN:
         >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
         """
         self.wd = wd
-        num_samples = X_train.shape[0]
         num_samples = len(X_train)
         num_batches = (num_samples + batch_size - 1) // batch_size
         self.num_samples = num_samples
@@ -903,10 +902,8 @@ class CNN:
         
         self.final_loss = 0
         y_final = []
-        j = 0
 
         for i in range(0, num_samples, batch_size):
-            j += 1
             X_batch = X_train[i:i+batch_size]
             y_batch = y_train[i:i+batch_size]
             batch_conv_outputs_flat = []
@@ -967,7 +964,6 @@ class CNN:
         >>> y_pred = model_cnn.predict(X_test=X_train)
         """
         y_pred_final = []
-        num_samples = X_test.shape[0]
         num_samples = len(X_test)
 
         for i in range(0, num_samples, self.batch_size):
