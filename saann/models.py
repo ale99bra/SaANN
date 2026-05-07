@@ -3,7 +3,9 @@
 # Licensed under the MIT License
 #PUT BACK THE DOTS
 
-import numpy as np
+#import numpy as np
+import datetime
+import pickle
 from . import losses
 from .gradients import SGD
 from .layers import MLP, DenseLayer
@@ -69,7 +71,31 @@ def col2im(dX_col, X_shape, K, stride=1, padding=0, H_out=None, W_out=None):
         return dX_padded[:, padding:-padding, padding:-padding, :]
     return dX_padded
 
+def load_model(model_file):
+    dummy_1 = type(CNN())
+    dummy_2 = type(SequentialModel())
+    try:
+        loaded_model = pickle.load(open(model_file, 'rb'))
+        if type(loaded_model) in (dummy_1, dummy_2):
+            print("Model loaded")
+        else:
+            print("Object loaded:", type(loaded_model))
+        return loaded_model
+    except ImportError as e:
+        raise ValueError("Couldn't load model:", e)
+    
 
+def save_model(model, model_file_name = "model.pickle"):
+    dummy_1 = type(CNN())
+    dummy_2 = type(SequentialModel())
+    try:
+        pickle.dump(model, open(model_file_name, 'wb'))
+        if type(model) in (dummy_1, dummy_2):
+            print("Model saved as:", model_file_name)
+        else:
+            print(f"Object {type(model)} saved as:", model_file_name)
+    except ImportError as e:
+        raise ValueError("Couldn't save model:", e)
 
 
 class SequentialModel:
@@ -244,9 +270,9 @@ class SequentialModel:
                 loss_list.append(avg_loss)
             if real_time:
                 plt.clf()
-                if log_plot: plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-                else: plt.plot(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-                plt.title(f"Average loss (over the {num_batches} batches) over the epochs (current: {epoch})")
+                if log_plot: plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+                else: plt.plot(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+                plt.title(f"Average loss ({num_batches} batches) over the epochs (current: {epoch})")
                 plt.xlabel("Epoch")
                 plt.ylabel("Average loss")
                 plt.pause(5e-3)
@@ -263,9 +289,9 @@ class SequentialModel:
         if graphical:
             plt.clf()
             if real_time:plt.ioff()
-            if log_plot:plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-            else: plt.plot(BE.xp.arange(1, epochs+1, step = 1), loss_list, linestyle = '-')
-            plt.title(f"Average loss (over the {num_batches} batches) over the epochs")
+            if log_plot:plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+            else: plt.plot(BE.to_numpy(BE.xp.arange(1, epochs+1, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+            plt.title(f"Average loss ({num_batches} batches) over the epochs")
             plt.xlabel("Epoch")
             plt.ylabel("Average loss")
             plt.show()
@@ -513,6 +539,7 @@ class CNN:
         self.init_function = init_function
         self.num_filters = num_filters
         self.og_params_conv = [self.filter_size, self.num_filters, self.padding, self.stride]
+        self.est_time = None
 
         params_int = [filter_size, num_filters, padding, stride, num_channels, pool_size]
         params_label = ["filter_size"," num_filters", "padding", "stride", "num_channels", "pool_size"]
@@ -820,12 +847,23 @@ class CNN:
         >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
         >>> final_pred = model_cnn.fit(X_train = X_train, y_train=y_train, epochs = 250, batch_size = 32, wd = 0, graphical = True, real_time = False, log_plot = False)
         """
+
         self.wd = wd
         num_samples = len(X_train)
         num_batches = (num_samples + batch_size - 1) // batch_size
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.num_classes = y_train.shape[1]
+
+        if self.est_time != None:
+            self.est_time *= num_samples * (epochs +1) * 2 * 1.5
+        
+            if self.est_time > 3600:
+                print(f"Estimated time: {int(BE.xp.floor(self.est_time/3600))} hours and {int((self.est_time/3600 - BE.xp.floor(self.est_time/3600))*60)} minutes.\n")
+            else:
+                print(f"Estimated time: {int(BE.xp.ceil(self.est_time/60))} minutes.\n")
+
+        #quit()
         
         self.loss_func = losses.cross_entropy
         self.loss_gradient = losses.cross_entropy_der
@@ -893,9 +931,9 @@ class CNN:
                 loss_list.append(avg_loss)
             if real_time:
                 plt.clf()
-                if log_plot: plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-                else: plt.plot(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-                plt.title(f"Average loss (over the {num_batches} batches) over the epochs (current: {epoch})")
+                if log_plot: plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+                else: plt.plot(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+                plt.title(f"Average loss ({num_batches} batches) over the epochs (current: {epoch})")
                 plt.xlabel("Epoch")
                 plt.ylabel("Average loss")
                 plt.pause(5e-3)
@@ -930,9 +968,9 @@ class CNN:
         if graphical:
             plt.clf()
             if real_time:plt.ioff()
-            if log_plot:plt.semilogy(BE.xp.arange(1, epoch+2, step = 1), loss_list, linestyle = '-')
-            else: plt.plot(BE.xp.arange(1, epochs+1, step = 1), loss_list, linestyle = '-')
-            plt.title(f"Average loss (over the {num_batches} batches) over the epochs")
+            if log_plot:plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+            else: plt.plot(BE.to_numpy(BE.xp.arange(1, epochs+1, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+            plt.title(f"Average loss ({num_batches} batches) over the epochs")
             plt.xlabel("Epoch")
             plt.ylabel("Average loss")
             plt.show()
@@ -1002,6 +1040,8 @@ class CNN:
         ]
         """
 
+        in_time = datetime.datetime.now()
+
         batch_conv_outputs_flat = []
         
         conv_out = self.ConvolutionBlock(X=X_train[0:1])
@@ -1010,5 +1050,12 @@ class CNN:
         batch_conv_outputs_flat = BE.xp.array(batch_conv_outputs_flat)
     
         in_size = batch_conv_outputs_flat.size
-        
+
+        fin_time = datetime.datetime.now()
+
+        if BE.gpu_available == True:
+            self.est_time = None
+        else:
+            self.est_time = (fin_time - in_time).total_seconds()
+
         return in_size

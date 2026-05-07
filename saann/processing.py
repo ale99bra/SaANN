@@ -2,9 +2,14 @@
 # Copyright (c) 2026 Alessio Branda
 # Licensed under the MIT License
 
-import numpy as np
 import pandas as pd
 import warnings
+import matplotlib.image as mpimg
+from PIL import Image
+import sys
+import os
+from os import listdir
+from os.path import isfile, join, isdir
 from . import backend as BE
 
 
@@ -164,3 +169,216 @@ class Scaling:
         """
         self.scaled_data = (x-BE.xp.mean(x))/(BE.xp.max(x)-BE.xp.min(x))
         return self.scaled_data
+
+class ImageProcessing:
+
+    def __init__(self, images_path):
+        self.path = images_path
+        self.X = []
+        self.y = []
+
+    def image_upload(self, rel_path = None):
+        if rel_path == None:
+            rel_path = self.res_path
+    
+        images = [f for f in listdir(rel_path) if isfile(join(rel_path, f))]
+        idx = 0
+        for image in images:
+            tag = image.split(sep="_")[0]
+            if sys.platform.startswith("win"):
+                raw = mpimg.imread(rf"{rel_path}\{image}")
+            else:
+                raw = mpimg.imread(rf"{rel_path}/{image}")
+            self.X.append(raw)
+            self.y.append(tag)
+            if (idx+1) % 100 == 0:
+                print("Processing image #",idx+1)
+            idx += 1
+        return self.X, self.y
+    
+    def prepare_images(self, size = 128, amount = None):
+        self.num_images = amount
+        list_dir = [f for f in listdir(self.path) if isdir(join(self.path, f))] 
+
+        if "resized" in list_dir: # if ran multiple times
+            list_dir.remove("resized")
+
+        try:
+            list_dir.remove("resized_tmp")
+        except:
+            pass
+            #print("Removed the 'resized' directory from the list.")
+
+        print("List of directories: ", list_dir)
+
+        self.list_dir = list_dir.copy()
+
+        for dir in list_dir:
+            if sys.platform.startswith("win"):
+                rel_path = rf"{self.path}\{dir}"
+            else:
+                rel_path = rf"{self.path}/{dir}"
+
+            resized_path = self.resize_images(rel_path=rel_path, og_path=self.path, size=size)
+
+        self.res_path = resized_path
+                
+    
+    def resize_images(self, rel_path, og_path, size):
+        images = [f for f in listdir(rel_path) if isfile(join(rel_path, f))]
+        idx = 0
+        try:
+            tag = rel_path.split(sep="\\")[-1]
+        except:
+            tag = rel_path.split(sep="/")[-1]
+        min_size = (size, size)
+        idx = 1
+
+        if sys.platform.startswith("win"): #on Windows systems
+            tag = rel_path.split(sep="\\")[-1]
+
+            try:
+                os.mkdir(rf"{og_path}\resized")
+            except:
+                #print(fr"Directory {og_path}\resized already exists.")
+                pass
+
+            for image in images:
+                img = Image.open(rf"{rel_path}\{image}")
+                img = img.resize(min_size)
+                img.save(rf"{og_path}\resized\{tag}_{idx}.jpg", optimize=True, quality=70)
+
+                if isinstance(self.num_images, int) and idx == self.num_images:
+                    break
+
+                idx += 1
+            return rf"{og_path}\resized"
+
+        else: # on Unix-like systems
+            tag = rel_path.split(sep="/")[-1]
+
+            try:
+                os.mkdir(rf"{og_path}/resized")
+            except:
+                print(fr"Directory {og_path}/resized already exists.")
+
+            for image in images:
+                img = Image.open(rf"{rel_path}/{image}")
+                img = img.resize(min_size)
+                img.save(rf"{og_path}/resized/{tag}_{idx}.jpg", optimize=True, quality=70)
+
+                if isinstance(self.num_images, int) and idx == self.num_images:
+                    break
+
+                idx += 1
+            return rf"{og_path}/resized"
+        
+    def clean_datset(self, X = None, y = None):
+        if X == None:
+            X = self.X
+        if y == None:
+            y = self.y
+
+        X_clean = []
+        y_clean = []
+
+        self.clean_flag = False
+
+        for array, target in zip(X, y):
+            if len(array.shape) < 3:
+                continue
+            if array.shape[2] == 4:
+                X_clean.append(BE.xp.delete(array, obj = 3, axis=2))
+                y_clean.append(target)
+                self.clean_flag = True
+            else:
+                X_clean.append(array)
+                y_clean.append(target)
+        
+        if self.clean_flag:
+            print("Dataset has been cleaned.")
+        else:
+            print("Dataset already clean.")
+        
+        self.X = X_clean.copy()
+        self.y = y_clean.copy()
+
+        return self.X, self.y
+    
+    def prepare_features(self, X = None):
+        if X == None:
+            X = self.X
+
+        X = BE.xp.array([BE.xp.asarray(x) for x in X])
+        self.X = (X.astype('float32') / 255.0) - 0.5
+
+        return self.X
+    
+    def prepare_targets(self, y = None, list_classes = None):
+        if y == None:
+            y = self.y
+        
+        if list_classes == None:
+            list_classes = self.list_dir
+
+        list_classes = [l.split(sep="_")[0] for l in list_classes]
+    
+        y_tmp = BE.xp.zeros((len(y), len(list_classes)))
+
+        for i in range(len(y)):
+            idx = list_classes.index(y[i])
+            y_tmp[i][idx] = 1
+
+        self.y = y_tmp.copy()
+
+        self.list_classes = list_classes
+
+        return self.y
+    
+    def get_classes(self):
+        try:
+            return self.list_classes
+        except:
+            warnings.warn("No classes found.")
+
+    def shuffle_dataset(self, X = None, y = None):
+        if X == None and y != None or X != None and y == None:
+            raise ValueError("Please, either provide both arrays or neither.")
+        if X == None:
+            X = self.X
+        if y == None:
+            y = self.y
+        if len(X) != len(y):
+            raise ValueError(f"Lengths of the feature array and target array do not match: {len(X)} - {len(y)}")
+
+        perm = BE.xp.random.permutation(len(X))
+        self.X = X[perm]
+        self.y = y[perm]
+
+        print("Dataset has been shuffled.")
+
+        return self.X, self.y
+    
+    def ready_dataset(self, size, amount, remove_resized = False, shuffle = True, split_test_percentage = None):
+        self.prepare_images(size=size, amount=amount)
+        self.image_upload()
+        self.clean_datset()
+        self.prepare_features()
+        self.prepare_targets()
+        if shuffle:
+            self.shuffle_dataset()
+        if remove_resized:
+            import shutil
+            try:
+                shutil.rmtree(self.res_path, ignore_errors=True)
+                print(rf"{self.res_path} has been successfully deleted.")
+            except ImportError as e:
+                print(rf"{self.res_path} has not been been deleted: {e}.")
+
+        if split_test_percentage == None:
+            print("Dataset is ready to use")
+            return self.X, self.y, self.list_classes
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(X = self.X, y = self.y, split_test_percentage=split_test_percentage)
+            print(f"Dataset is ready and has been split into Train (length = {len(X_train)}) and Test (length = {len(X_test)}) sets.")
+            return X_train, X_test, y_train, y_test, self.list_classes

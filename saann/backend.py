@@ -7,6 +7,12 @@ import sys
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="cupy")
 
+def to_numpy(x):
+    # CuPy arrays have .get()
+    if hasattr(x, "get"):
+        return x.get()
+    return x
+
 def add_cupy_dll_path():
     if sys.platform.startswith("win"):
         try:
