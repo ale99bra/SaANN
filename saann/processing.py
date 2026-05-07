@@ -213,6 +213,7 @@ class ImageProcessing:
 
         self.list_dir = list_dir.copy()
 
+        print(f"Resizing images to ({size} x {size})")
         for dir in list_dir:
             if sys.platform.startswith("win"):
                 rel_path = rf"{self.path}\{dir}"
@@ -260,7 +261,8 @@ class ImageProcessing:
             try:
                 os.mkdir(rf"{og_path}/resized")
             except:
-                print(fr"Directory {og_path}/resized already exists.")
+                #print(fr"Directory {og_path}/resized already exists.")
+                pass
 
             for image in images:
                 img = Image.open(rf"{rel_path}/{image}")

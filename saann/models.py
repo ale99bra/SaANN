@@ -71,7 +71,7 @@ def col2im(dX_col, X_shape, K, stride=1, padding=0, H_out=None, W_out=None):
         return dX_padded[:, padding:-padding, padding:-padding, :]
     return dX_padded
 
-def load_model(model_file):
+def load_model_all(model_file):
     dummy_1 = type(CNN())
     dummy_2 = type(SequentialModel())
     try:
@@ -82,10 +82,9 @@ def load_model(model_file):
             print("Object loaded:", type(loaded_model))
         return loaded_model
     except ImportError as e:
-        raise ValueError("Couldn't load model:", e)
-    
+        raise ValueError("Couldn't load model:", e)    
 
-def save_model(model, model_file_name = "model.pickle"):
+def save_model_all(model, model_file_name = "model.pickle", weights_only = False, clear_cache = False):
     dummy_1 = type(CNN())
     dummy_2 = type(SequentialModel())
     try:
@@ -97,6 +96,16 @@ def save_model(model, model_file_name = "model.pickle"):
     except ImportError as e:
         raise ValueError("Couldn't save model:", e)
 
+def load_CNN_model(path):
+    try:
+        model = CNN()
+        model.load_model_light(path)
+        return model
+    except ImportError as e:
+        raise ValueError("Couldn't load CNN model:", e)
+
+def load_Sequential_model(path):
+    print("To implement")
 
 class SequentialModel:
     """
@@ -538,6 +547,7 @@ class CNN:
         self.activation_function = activation_function
         self.init_function = init_function
         self.num_filters = num_filters
+        self.num_channels = num_channels
         self.og_params_conv = [self.filter_size, self.num_filters, self.padding, self.stride]
         self.est_time = None
 
@@ -596,9 +606,11 @@ class CNN:
         ]
         >>> model_cnn.construct(layers_info=layer_info, learning_rate=1e-4)
         """
+        self.layers_info = layers_info
         self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
+        
 
     class ConvolutionLayer:
 
@@ -813,7 +825,7 @@ class CNN:
         self.conv1a.update(self.learning_rate, self.wd)
 
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.0001, graphical = False, real_time = False, log_plot = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.0001, graphical = False, real_time = False, log_plot = False, report = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
@@ -974,10 +986,17 @@ class CNN:
             plt.xlabel("Epoch")
             plt.ylabel("Average loss")
             plt.show()
+        
+        if report:
+            from .metrics import Metrics
+            print("\n****Report on final prediction****")
+            metrics_report = Metrics(y_test=y_train, y_pred=self.final_pred)
+            metrics_report.report(graphical=graphical)
+            print()
 
         return self.final_pred
     
-    def predict(self, X_test):
+    def predict(self, X_test, batch_size = None):
         """
         Make predictions using the testing features.\n
         Parameter
@@ -1004,8 +1023,14 @@ class CNN:
         y_pred_final = []
         num_samples = len(X_test)
 
-        for i in range(0, num_samples, self.batch_size):
-            X_batch = X_test[i:i+self.batch_size]
+        if batch_size == None:
+            try:
+                batch_size = self.batch_size
+            except:
+                batch_size = num_samples//10
+
+        for i in range(0, num_samples, batch_size):
+            X_batch = X_test[i:i+batch_size]
             batch_conv_outputs_flat = []
             conv_out = self.ConvolutionBlock(X=X_batch)
 
@@ -1059,3 +1084,233 @@ class CNN:
             self.est_time = (fin_time - in_time).total_seconds()
 
         return in_size
+    
+    def save_weights(self, path):
+        weights = {
+            "conv1a": {
+                "W": self.conv1a.weights,
+                "b": self.conv1a.biases,
+                "gamma": self.conv1a.bn.gamma,
+                "beta": self.conv1a.bn.beta,
+                "running_mean": self.conv1a.bn.running_mean,
+                "running_var": self.conv1a.bn.running_var
+            },
+            "conv1b": {
+                "W": self.conv1b.weights,
+                "b": self.conv1b.biases,
+                "gamma": self.conv1b.bn.gamma,
+                "beta": self.conv1b.bn.beta,
+                "running_mean": self.conv1b.bn.running_mean,
+                "running_var": self.conv1b.bn.running_var
+            },
+            "conv2a": {
+                "W": self.conv2a.weights,
+                "b": self.conv2a.biases,
+                "gamma": self.conv2a.bn.gamma,
+                "beta": self.conv2a.bn.beta,
+                "running_mean": self.conv2a.bn.running_mean,
+                "running_var": self.conv2a.bn.running_var
+            },
+            "conv2b": {
+                "W": self.conv2b.weights,
+                "b": self.conv2b.biases,
+                "gamma": self.conv2b.bn.gamma,
+                "beta": self.conv2b.bn.beta,
+                "running_mean": self.conv2b.bn.running_mean,
+                "running_var": self.conv2b.bn.running_var
+            },
+            "conv3a": {
+                "W": self.conv3a.weights,
+                "b": self.conv3a.biases,
+                "gamma": self.conv3a.bn.gamma,
+                "beta": self.conv3a.bn.beta,
+                "running_mean": self.conv3a.bn.running_mean,
+                "running_var": self.conv3a.bn.running_var
+            },
+            "conv3b": {
+                "W": self.conv3b.weights,
+                "b": self.conv3b.biases,
+                "gamma": self.conv3b.bn.gamma,
+                "beta": self.conv3b.bn.beta,
+                "running_mean": self.conv3b.bn.running_mean,
+                "running_var": self.conv3b.bn.running_var
+            },
+            "mlp": [
+                {
+                    "W": layer.weights,
+                    "b": layer.biases
+                }
+                for layer in self.mlp.layers
+            ]
+        }
+        if path == None:
+            return weights
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(weights, f)
+
+    def load_weights(self, path):
+        with open(path, "rb") as f:
+            weights = pickle.load(f)
+
+        # Load conv layers
+        self.conv1a.weights = weights["conv1a"]["W"]
+        self.conv1a.biases = weights["conv1a"]["b"]
+        self.conv1a.bn.gamma = weights["conv1a"]["gamma"]
+        self.conv1a.bn.beta = weights["conv1a"]["beta"]
+        self.conv1a.bn.running_mean = weights["conv1a"]["running_mean"]
+        self.conv1a.bn.running_var = weights["conv1a"]["running_var"]
+
+        self.conv1b.weights = weights["conv1b"]["W"]
+        self.conv1b.biases = weights["conv1b"]["b"]
+        self.conv1b.bn.gamma = weights["conv1b"]["gamma"]
+        self.conv1b.bn.beta = weights["conv1b"]["beta"]
+        self.conv1b.bn.running_mean = weights["conv1b"]["running_mean"]
+        self.conv1b.bn.running_var = weights["conv1b"]["running_var"]
+
+
+        self.conv2a.weights = weights["conv2a"]["W"]
+        self.conv2a.biases = weights["conv2a"]["b"]
+        self.conv2a.bn.gamma = weights["conv2a"]["gamma"]
+        self.conv2a.bn.beta = weights["conv2a"]["beta"]
+        self.conv2a.bn.running_mean = weights["conv2a"]["running_mean"]
+        self.conv2a.bn.running_var = weights["conv2a"]["running_var"]
+
+        self.conv2b.weights = weights["conv2b"]["W"]
+        self.conv2b.biases = weights["conv2b"]["b"]
+        self.conv2b.bn.gamma = weights["conv2b"]["gamma"]
+        self.conv2b.bn.beta = weights["conv2b"]["beta"]
+        self.conv2b.bn.running_mean = weights["conv2b"]["running_mean"]
+        self.conv2b.bn.running_var = weights["conv2b"]["running_var"]
+
+
+        self.conv3a.weights = weights["conv3a"]["W"]
+        self.conv3a.biases = weights["conv3a"]["b"]
+        self.conv3a.bn.gamma = weights["conv3a"]["gamma"]
+        self.conv3a.bn.beta = weights["conv3a"]["beta"]
+        self.conv3a.bn.running_mean = weights["conv3a"]["running_mean"]
+        self.conv3a.bn.running_var = weights["conv3a"]["running_var"]
+
+        self.conv3b.weights = weights["conv3b"]["W"]
+        self.conv3b.biases = weights["conv3b"]["b"]
+        self.conv3b.bn.gamma = weights["conv3b"]["gamma"]
+        self.conv3b.bn.beta = weights["conv3b"]["beta"]
+        self.conv3b.bn.running_mean = weights["conv3b"]["running_mean"]
+        self.conv3b.bn.running_var = weights["conv3b"]["running_var"]
+
+        # Load MLP layers
+        for layer, saved in zip(self.mlp.layers, weights["mlp"]):
+            layer.weights = saved["W"]
+            layer.biases = saved["b"]
+
+    def load_weights_internal(self, weights):
+
+        # Load conv layers
+        self.conv1a.weights = weights["conv1a"]["W"]
+        self.conv1a.biases = weights["conv1a"]["b"]
+        self.conv1a.bn.gamma = weights["conv1a"]["gamma"]
+        self.conv1a.bn.beta = weights["conv1a"]["beta"]
+        self.conv1a.bn.running_mean = weights["conv1a"]["running_mean"]
+        self.conv1a.bn.running_var = weights["conv1a"]["running_var"]
+
+        self.conv1b.weights = weights["conv1b"]["W"]
+        self.conv1b.biases = weights["conv1b"]["b"]
+        self.conv1b.bn.gamma = weights["conv1b"]["gamma"]
+        self.conv1b.bn.beta = weights["conv1b"]["beta"]
+        self.conv1b.bn.running_mean = weights["conv1b"]["running_mean"]
+        self.conv1b.bn.running_var = weights["conv1b"]["running_var"]
+
+
+        self.conv2a.weights = weights["conv2a"]["W"]
+        self.conv2a.biases = weights["conv2a"]["b"]
+        self.conv2a.bn.gamma = weights["conv2a"]["gamma"]
+        self.conv2a.bn.beta = weights["conv2a"]["beta"]
+        self.conv2a.bn.running_mean = weights["conv2a"]["running_mean"]
+        self.conv2a.bn.running_var = weights["conv2a"]["running_var"]
+
+        self.conv2b.weights = weights["conv2b"]["W"]
+        self.conv2b.biases = weights["conv2b"]["b"]
+        self.conv2b.bn.gamma = weights["conv2b"]["gamma"]
+        self.conv2b.bn.beta = weights["conv2b"]["beta"]
+        self.conv2b.bn.running_mean = weights["conv2b"]["running_mean"]
+        self.conv2b.bn.running_var = weights["conv2b"]["running_var"]
+
+
+        self.conv3a.weights = weights["conv3a"]["W"]
+        self.conv3a.biases = weights["conv3a"]["b"]
+        self.conv3a.bn.gamma = weights["conv3a"]["gamma"]
+        self.conv3a.bn.beta = weights["conv3a"]["beta"]
+        self.conv3a.bn.running_mean = weights["conv3a"]["running_mean"]
+        self.conv3a.bn.running_var = weights["conv3a"]["running_var"]
+
+        self.conv3b.weights = weights["conv3b"]["W"]
+        self.conv3b.biases = weights["conv3b"]["b"]
+        self.conv3b.bn.gamma = weights["conv3b"]["gamma"]
+        self.conv3b.bn.beta = weights["conv3b"]["beta"]
+        self.conv3b.bn.running_mean = weights["conv3b"]["running_mean"]
+        self.conv3b.bn.running_var = weights["conv3b"]["running_var"]
+
+        # Load MLP layers
+        for layer, saved in zip(self.mlp.layers, weights["mlp"]):
+            layer.weights = saved["W"]
+            layer.biases = saved["b"]
+
+    def save_model_light(self, path = "model.pickle"):
+        try:
+            self.batch_size += 1
+            self.batch_size -= 1
+        except:
+            self.batch_size = 16
+        try:
+            weights = self.save_weights(path=None)
+            model_architecture = {
+                "weights" : weights,
+                "layers_info" : self.layers_info,
+                "batch_size" : self.batch_size,
+                "filter_size": self.filter_size,
+                "stride" : self.stride,
+                "padding" : self.padding,
+                "activation_function" : self.activation_function,
+                "init_function" : self.init_function,
+                "num_filters" : self.num_filters,
+                "num_channels" : self.num_channels
+            }
+            with open(path, "wb") as f:
+                pickle.dump(model_architecture, f)
+            print(f"Model saved: {path}")
+        except ImportError as e:
+            raise ValueError(f"{e}")
+    
+    def load_model_light(self, path):
+        try:
+            with open(path, "rb") as f:
+                model = pickle.load(f)
+            
+                weights = model["weights"]
+                layers_info = model["layers_info"]
+                batch_size = model["batch_size"]
+                filter_size = model["filter_size"]
+                stride = model["stride"]
+                padding = model["padding"]
+                activation_function = model["activation_function"]
+                init_function = model["init_function"]
+                num_filters = model["num_filters"]
+                num_channels = model["num_channels"]
+
+            self.conv1a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = num_channels, activation_function = activation_function, init_function = init_function, pool_size = 2)
+            self.conv2a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
+            self.conv3a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 4*num_filters, padding = padding, stride = stride, num_channels = 2*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
+
+            self.conv1b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
+            self.conv2b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 2*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
+            self.conv3b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 4*num_filters, padding = padding, stride = stride, num_channels = 4*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
+
+            self.batch_size = batch_size
+
+            self.construct(layers_info=layers_info)
+            self.load_weights_internal(weights=weights)
+            print("Model loaded")
+        except ImportError as e:
+            raise ValueError(e)
+
+
