@@ -359,7 +359,7 @@ class ImageProcessing:
 
         return self.X, self.y
     
-    def ready_dataset(self, size, amount, remove_resized = False, shuffle = True, split_test_percentage = None):
+    def ready_dataset(self, size, amount = None, remove_resized = False, shuffle = True, split_test_percentage = None):
         self.prepare_images(size=size, amount=amount)
         self.image_upload()
         self.clean_datset()
