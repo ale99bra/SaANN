@@ -167,12 +167,12 @@ class SequentialModel:
         )
     """
 
-    def __init__(self, GPU = False):
+    def __init__(self, gpu = False):
         self.mlp = None
         self.optiomizer = None
         self.learning_rate = None
         
-        if GPU:
+        if gpu:
             pass
         else:
             print("Switching to CPU")
@@ -623,7 +623,7 @@ class CNN:
         >>> y_pred = model_cnn.predict(X_test)
     """
 
-    def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2, GPU = True):
+    def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2, gpu = True):
         self.mlp = None
         self.optimizer = None
         self.batchnorm = None
@@ -642,7 +642,7 @@ class CNN:
         params_int = [filter_size, num_filters, padding, stride, num_channels, pool_size]
         params_label = ["filter_size"," num_filters", "padding", "stride", "num_channels", "pool_size"]
 
-        if GPU:
+        if gpu:
             pass
         else:
             print("Switching to CPU")
