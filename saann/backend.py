@@ -13,6 +13,21 @@ def to_numpy(x):
         return x.get()
     return x
 
+def use_cpu():
+    global FORCE_CPU, xp, gpu_available
+    FORCE_CPU = True
+    import numpy as np
+    xp = np
+    gpu_available = False
+
+def use_gpu():
+    global FORCE_CPU, xp, gpu_available
+    FORCE_CPU = False
+    import cupy as cp
+    xp = cp
+    gpu_available = True
+
+
 def add_cupy_dll_path():
     if sys.platform.startswith("win"):
         try:
@@ -35,8 +50,8 @@ try:
     gpu_available = True
 
     # Warm up GPU
-    a = xp.zeros((1,), dtype=xp.float32)
-    b = xp.zeros((1,), dtype=xp.float32)
+    a = xp.zeros((10,), dtype=xp.float32)
+    b = xp.zeros((10,), dtype=xp.float32)
     res = xp.dot(a, b)
     print("GPU warm-up successful!")
 

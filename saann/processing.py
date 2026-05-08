@@ -3,6 +3,7 @@
 # Licensed under the MIT License
 
 import pandas as pd
+import numpy as np
 import warnings
 import matplotlib.image as mpimg
 from PIL import Image
@@ -40,7 +41,7 @@ def train_test_split(X, y, split_test_percentage = 0.3):
     -------
         >>> X_train, X_test, y_train, y_test = train_test_split(X, y, split_test_percentage = 0.3)
     """
-    if isinstance(X, (list, BE.xp.ndarray, pd.DataFrame)):
+    if isinstance(X, (list, BE.xp.ndarray, pd.DataFrame, np.ndarray)):
         if isinstance(X, BE.xp.ndarray):
             pass
         else:
@@ -53,7 +54,7 @@ def train_test_split(X, y, split_test_percentage = 0.3):
     else:
         raise TypeError(f"The given 'X' type ({type(X)}) is not supported.")
     
-    if isinstance(y, (list, BE.xp.ndarray, pd.DataFrame)):
+    if isinstance(y, (list, BE.xp.ndarray, pd.DataFrame, np.ndarray)):
         if isinstance(y, BE.xp.ndarray): 
             pass
         else:
@@ -373,9 +374,10 @@ class ImageProcessing:
             import shutil
             try:
                 shutil.rmtree(self.res_path, ignore_errors=True)
-                print(rf"{self.res_path} has been successfully deleted.")
+                #print(rf"{self.res_path} has been successfully deleted.")
             except ImportError as e:
-                print(rf"{self.res_path} has not been been deleted: {e}.")
+                #print(rf"{self.res_path} has not been been deleted: {e}.")
+                pass
 
         if split_test_percentage == None:
             print("Dataset is ready to use")

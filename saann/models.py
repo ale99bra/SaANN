@@ -1,7 +1,7 @@
 # models.py
 # Copyright (c) 2026 Alessio Branda
 # Licensed under the MIT License
-#PUT BACK THE DOTS
+
 
 #import numpy as np
 import datetime
@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
+
+VERSION = "0.2.0"
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -79,7 +81,7 @@ def load_model_all(model_file):
         if type(loaded_model) in (dummy_1, dummy_2):
             print("Model loaded")
         else:
-            print("Object loaded:", type(loaded_model))
+            print("Object loaded (not model!):", type(loaded_model))
         return loaded_model
     except ImportError as e:
         raise ValueError("Couldn't load model:", e)    
@@ -99,13 +101,32 @@ def save_model_all(model, model_file_name = "model.pickle", weights_only = False
 def load_CNN_model(path):
     try:
         model = CNN()
-        model.load_model_light(path)
+        model.load_model(path)
         return model
     except ImportError as e:
         raise ValueError("Couldn't load CNN model:", e)
 
 def load_Sequential_model(path):
-    print("To implement")
+    try:
+        model = SequentialModel()
+        model.load_model(path)
+        return model
+    except ImportError as e:
+        raise ValueError("Couldn't load Sequential model:", e)
+
+def load_model(path):
+    try:
+        with open(path, "rb") as f:
+            model = pickle.load(f)
+            if model["model"] == "CNN":
+                model_import = load_CNN_model(path)
+            elif model["model"] == "SequentialModel":
+                model_import = load_Sequential_model(path)
+            else:
+                raise KeyError(f"Couldn't recognize model '{model["model"]}'.")
+            return model_import
+    except ImportError as e:
+        raise ValueError("Couldn't load model:", e)
 
 class SequentialModel:
     """
@@ -146,10 +167,16 @@ class SequentialModel:
         )
     """
 
-    def __init__(self):
+    def __init__(self, GPU = False):
         self.mlp = None
         self.optiomizer = None
         self.learning_rate = None
+        
+        if GPU:
+            pass
+        else:
+            print("Switching to CPU")
+            BE.use_cpu()
 
     def construct(self, layers_info, learning_rate = 0.01, batch_norm = False, dropout = False):
         """
@@ -165,6 +192,7 @@ class SequentialModel:
         >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
         >>> model.construct(ly_info, learning_rate=0.2)
         """
+        self.layers_info = layers_info
         self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
@@ -305,7 +333,7 @@ class SequentialModel:
             plt.ylabel("Average loss")
             plt.show()
 
-        return self.final_pred
+        return BE.to_numpy(self.final_pred)
     
     def predict(self, X_test):
         """
@@ -405,7 +433,7 @@ class SequentialModel:
             else: print(f"\n'cross-entropy' loss function result of Test vs. Predicted: {BE.xp.mean(test_loss_value):2g}")
         if scatter_comparison:
             try:
-                plt.scatter(x=y_pred, y=y_test)
+                plt.scatter(x=BE.to_numpy(y_pred), y=BE.to_numpy(y_test))
                 plt.title("Test data vs. Predicted data")
                 plt.ylabel("Test")
                 plt.xlabel("Prediction")
@@ -425,6 +453,66 @@ class SequentialModel:
             
 
         return y_pred, final_pred_train, X_train, X_test, y_train, y_test
+    
+    def save_weights(self, path):
+        weights = {
+            "mlp": [
+                {
+                    "W": layer.weights,
+                    "b": layer.biases,
+                }
+                for layer in self.mlp.layers
+            ]
+        }
+        if path == None:
+            return weights
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(weights, f)
+    
+    def load_weights(self, weights):
+        # Load MLP layers
+        for layer, saved in zip(self.mlp.layers, weights["mlp"]):
+            layer.weights = saved["W"]
+            layer.biases = saved["b"]
+    
+    def save_model(self, path = "model.pickle"):
+        self.batch_size = getattr(self, "batch_size", 16)
+        self.num_channels = getattr(self, "num_channels", 3)
+        try:
+            weights = self.save_weights(path=None)
+            model_architecture = {
+                "version" : VERSION,
+                "model" : "SequentialModel",
+                "weights" : weights,
+                "layers_info" : self.layers_info,
+                "batch_size" : self.batch_size,
+            }
+            with open(path, "wb") as f:
+                pickle.dump(model_architecture, f)
+            print(f"Model saved: {path}")
+        except ImportError as e:
+            raise ValueError(f"{e}")
+    
+    def load_model(self, path):
+        try:
+            with open(path, "rb") as f:
+                model = pickle.load(f)
+                version = model["version"]
+                weights = model["weights"]
+                layers_info = model["layers_info"]
+                batch_size = model["batch_size"]
+            
+            if version != VERSION:
+                raise ValueError(f"Current version {VERSION} of the model does not match loaded version {version}.")
+            
+            self.batch_size = batch_size
+
+            self.construct(layers_info=layers_info)
+            self.load_weights(weights=weights)
+            print("Sequential model loaded")
+        except ImportError as e:
+            raise ValueError(e)
 
 
 
@@ -535,7 +623,7 @@ class CNN:
         >>> y_pred = model_cnn.predict(X_test)
     """
 
-    def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2):
+    def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2, GPU = True):
         self.mlp = None
         self.optimizer = None
         self.batchnorm = None
@@ -553,6 +641,12 @@ class CNN:
 
         params_int = [filter_size, num_filters, padding, stride, num_channels, pool_size]
         params_label = ["filter_size"," num_filters", "padding", "stride", "num_channels", "pool_size"]
+
+        if GPU:
+            pass
+        else:
+            print("Switching to CPU")
+            BE.use_cpu()
 
         for p in range(len(params_int)):
             if not isinstance(params_int[p], int):
@@ -874,8 +968,6 @@ class CNN:
                 print(f"Estimated time: {int(BE.xp.floor(self.est_time/3600))} hours and {int((self.est_time/3600 - BE.xp.floor(self.est_time/3600))*60)} minutes.\n")
             else:
                 print(f"Estimated time: {int(BE.xp.ceil(self.est_time/60))} minutes.\n")
-
-        #quit()
         
         self.loss_func = losses.cross_entropy
         self.loss_gradient = losses.cross_entropy_der
@@ -1255,15 +1347,14 @@ class CNN:
             layer.weights = saved["W"]
             layer.biases = saved["b"]
 
-    def save_model_light(self, path = "model.pickle"):
-        try:
-            self.batch_size += 1
-            self.batch_size -= 1
-        except:
-            self.batch_size = 16
+    def save_model(self, path = "model_CNN.pickle"):
+        self.batch_size = getattr(self, "batch_size", 16)
+        self.num_channels = getattr(self, "num_channels", 3)
         try:
             weights = self.save_weights(path=None)
             model_architecture = {
+                "version" : VERSION,
+                "model" : "CNN",
                 "weights" : weights,
                 "layers_info" : self.layers_info,
                 "batch_size" : self.batch_size,
@@ -1281,11 +1372,11 @@ class CNN:
         except ImportError as e:
             raise ValueError(f"{e}")
     
-    def load_model_light(self, path):
+    def load_model(self, path):
         try:
             with open(path, "rb") as f:
                 model = pickle.load(f)
-            
+                version = model["version"]
                 weights = model["weights"]
                 layers_info = model["layers_info"]
                 batch_size = model["batch_size"]
@@ -1296,6 +1387,9 @@ class CNN:
                 init_function = model["init_function"]
                 num_filters = model["num_filters"]
                 num_channels = model["num_channels"]
+            
+            if version != VERSION:
+                raise ValueError(f"Current version {VERSION} of the model does not match loaded version {version}.")
 
             self.conv1a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = num_channels, activation_function = activation_function, init_function = init_function, pool_size = 2)
             self.conv2a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
@@ -1309,7 +1403,7 @@ class CNN:
 
             self.construct(layers_info=layers_info)
             self.load_weights_internal(weights=weights)
-            print("Model loaded")
+            print("CNN model loaded")
         except ImportError as e:
             raise ValueError(e)
 
