@@ -133,6 +133,7 @@ class TestCNN(unittest.TestCase):
         self.X_train = np.random.randn(8, 15, 15, 3)
         self.y_train = np.random.randn(8, 4)
         self.X_test = np.random.randn(4, 15, 15, 3)
+        self.y_test = np.random.randn(4, 4)
 
         """data = [
             [[[-0.34313726, -0.23725489, -0.19411764], 
@@ -214,7 +215,7 @@ class TestCNN(unittest.TestCase):
         predictions = self.model.predict(self.X_test)
         
         # Check shape
-        self.assertEqual(predictions.shape, self.X_test.shape)
+        self.assertEqual(predictions.shape, self.y_test.shape)
 
     def test_predict_returns_numpy_array(self):
         """Test that predict returns a numpy array"""
