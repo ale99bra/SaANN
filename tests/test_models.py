@@ -130,9 +130,9 @@ class TestCNN(unittest.TestCase):
         """Initialize test fixtures before each test"""
         self.model = CNN(gpu=False)
         np.random.seed(42)
-        self.X_train = np.random.randn(8, 10, 10, 3)
+        self.X_train = np.random.randn(8, 15, 15, 3)
         self.y_train = np.random.randn(8, 4)
-        self.X_test = np.random.randn(8, 10, 10, 3)
+        self.X_test = np.random.randn(4, 15, 15, 3)
 
         """data = [
             [[[-0.34313726, -0.23725489, -0.19411764], 
