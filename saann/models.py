@@ -173,9 +173,12 @@ class SequentialModel:
         self.learning_rate = None
         
         if gpu:
-            pass
+            if BE.gpu_available:
+                print("Computing on GPU")
+            else:
+                print("GPU not available. Computing on CPU")
         else:
-            print("Switching to CPU")
+            print("Computing on CPU")
             BE.use_cpu()
 
     def construct(self, layers_info, learning_rate = 0.01, batch_norm = False, dropout = False):
@@ -196,6 +199,9 @@ class SequentialModel:
         self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
+
+        if layers_info[-1][2].lower() == "softmax":
+            print("The last layer of the MLP has 'softmax' activation. The model will use 'cross-entropy' as the loss function.")
 
     def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
         """
@@ -643,9 +649,12 @@ class CNN:
         params_label = ["filter_size"," num_filters", "padding", "stride", "num_channels", "pool_size"]
 
         if gpu:
-            pass
+            if BE.gpu_available:
+                print("Computing on GPU")
+            else:
+                print("GPU not available. Computing on CPU")
         else:
-            print("Switching to CPU")
+            print("Computing on CPU")
             BE.use_cpu()
 
         for p in range(len(params_int)):
@@ -704,7 +713,14 @@ class CNN:
         self.mlp = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
-        
+
+        if layers_info[-1][2].lower() != "softmax":
+            warnings.warn(
+                "The last layer of the CNN's MLP head does not use 'softmax'. "
+                "Cross-entropy loss expects probability distributions, so training may be unstable "
+                "or fail to converge. It is strongly recommended to use a softmax output for "
+                "multi-class classification.",
+                UserWarning)     
 
     class ConvolutionLayer:
 
