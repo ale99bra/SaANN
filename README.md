@@ -76,7 +76,7 @@ pip install git+https://github.com/ale99bra/SaANN.git
 
 ### Requirements
 
-- Python 3.10+
+- Python 3.11+
 - NumPy >=2.0,<3.0
 - Pandas >=3.0,<4.0
 - Matplotlib >=3.10,<4.0
@@ -290,6 +290,7 @@ Trains the model on data.
 - `graphical` (bool): Display training plot
 - `real_time` (bool): Update training plot in real-time
 - `log_plot` (bool): Display plot in semilogy scale
+- Returns: Final prediction of training (array)
 
 **`predict(X)`**
 
@@ -357,6 +358,7 @@ Train the CNN on data.
 - `wd` (float): Weight decay factor
 - `graphical` (bool): Display training plot
 - `report` (bool): Print metrics report after training
+- Returns: Final prediction of training (array)
 
 **`predict(X)`**
 
@@ -373,6 +375,9 @@ Save the model's architecture and weights in a pickle file
 ### `load_model(path)`
 
 Load the model saved using the model.save_model(path) method. It automatically detects the type of model saved. 
+
+- `path` (str): File path for output
+- Returns: Model (class)
 
 ### *Metrics*
 
@@ -397,6 +402,7 @@ Print a full metrics summary including:
 - Balanced Accuracy, Specificity, MCC
 - Confusion Matrix
 - ROC curves (One-vs-Rest for multi-class)
+
 
 - `graphical` (bool): Plots ROC curves and heatmap of the confusion matrix
 - `threshold_step` (float): Step used to increment from 0 to 1 for ROC calculation
@@ -478,7 +484,7 @@ Calculate Matthews correlation coefficient for each class
 
 ### *Processing*
 
-**`train_test_split(X, y, split_test_percentage = 0.3)`**
+**`train_test_split(X, y, split_test_percentage)`**
 
 Splits the dataset provided into Train and Test arrays
 
@@ -516,6 +522,7 @@ Data scaling utilities.
 Apply respective scaling transformations to features.
 
 - `x` (array): Features to scale
+- Returns: Scaled features (array)
 
 ### *Losses*
 
@@ -523,21 +530,36 @@ Apply respective scaling transformations to features.
 
 Mean Squared Error loss.
 
+- `y_true` (array): Targets used for testing
+- `y_pred` (array). Predicted targets
+
 **`MAE(y_true, y_pred)`**
 
 Mean Absolute Error loss.
+
+- `y_true` (array): Targets used for testing
+- `y_pred` (array). Predicted targets
 
 **`cross_entropy(y_true, y_pred)`**
 
 Cross-Entropy Error loss. 
 
+- `y_true` (array): Targets used for testing
+- `y_pred` (array). Predicted targets
+
 **`Huber(y_true, y_pred, delta)`**
 
 Huber loss with configurable delta parameter.
 
+- `y_true` (array): Targets used for testing
+- `y_pred` (array). Predicted targets
+
 **`R2_score(y_true, y_pred)`**
 
 Coefficient of determination (R²).
+
+- `y_true` (array): Targets used for testing
+- `y_pred` (array). Predicted targets
 
 ## Supported Activation Functions
 
@@ -585,7 +607,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests. R
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](/LICENCE) file for details.
 
 ## Author
 
