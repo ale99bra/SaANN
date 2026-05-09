@@ -27,7 +27,6 @@ class Metrics:
             self.FN = np.sum((y_pred == 0) & (y_test == 1))
             self.TN = np.sum((y_pred == 0) & (y_test == 0))
 
-
     def one_hot_vector(self, pred):
         y_pred_clip = []
         for yi in pred:

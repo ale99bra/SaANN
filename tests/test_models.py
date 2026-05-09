@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from saann.models import SequentialModel
+from saann.models import SequentialModel, CNN
 
 
 class TestSequentialModel(unittest.TestCase):
@@ -123,6 +123,86 @@ class TestSequentialModel(unittest.TestCase):
         
         self.assertIsInstance(predictions, np.ndarray)
 
+class TestCNN(unittest.TestCase):
+    """Test suite for CNN class"""
+
+    def setUp(self):
+        """Initialize test fixtures before each test"""
+        self.model = CNN()
+        np.random.seed(42)
+        self.X_train = np.random.randn(50, 3)
+        self.y_train = np.random.randn(50, 2)
+        self.X_test = np.random.randn(20, 3)
+
+        y_clip = []
+        for yi in self.y_train:
+            one_hot = np.zeros_like(yi)
+            one_hot[np.argmax(yi)] = 1
+            y_clip.append(one_hot)
+        self.y_train = np.asarray(y_clip)
+
+    def test_model_initialization(self):
+        """Test that model initializes correctly"""
+        self.assertIsNotNone(self.model)
+
+    def test_construct_sets_learning_rate(self):
+        """Test that construct sets learning rate"""
+        input_size = self.model.get_input_size(self.X_train)
+        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        learning_rate = 0.001
+        self.model.construct(layers_info, learning_rate=learning_rate)
+        
+        self.assertEqual(self.model.learning_rate, learning_rate)
+
+    def test_fit_trains_without_error(self):
+        """Test that fit method trains the model without errors"""
+        input_size = self.model.get_input_size(self.X_train)
+        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        
+        # Should not raise any exception
+        try:
+            self.model.fit(
+                self.X_train, 
+                self.y_train, 
+                epochs=2, 
+                batch_size=32
+            )
+        except Exception as e:
+            self.fail(f"fit() raised {type(e).__name__} unexpectedly: {e}")
+
+    def test_predict_returns_correct_shape(self):
+        """Test that predict returns correct output shape"""
+        input_size = self.model.get_input_size(self.X_train)
+        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32
+        )
+        
+        predictions = self.model.predict(self.X_test)
+        
+        # Check shape
+        self.assertEqual(predictions.shape, self.X_test.shape)
+
+    def test_predict_returns_numpy_array(self):
+        """Test that predict returns a numpy array"""
+        input_size = self.model.get_input_size(self.X_train)
+        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32,
+        )
+        
+        predictions = self.model.predict(self.X_test)
+        
+        self.assertIsInstance(predictions, np.ndarray)
 
 if __name__ == '__main__':
     unittest.main()

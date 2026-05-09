@@ -23,7 +23,7 @@ setup(
         "Intended Audience :: Education",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    python_requires=">=3.10",
+    python_requires=">=3.11",
     install_requires=[
         "numpy>=2.0,<3.0",
         "pandas>=3.0,<4.0",

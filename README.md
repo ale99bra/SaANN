@@ -22,7 +22,7 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 ### 🧩 Multi-Layer Perceptron (MLP)
 
 - Multiple activation functions: ReLU, Sigmoid, Tanh, Linear, Softmax
-- Multiple loss functions: MSE, MAE, Huber (with regularization)
+- Multiple loss functions: MSE, MAE, Huber, CE (with regularization)
 - Batch training with configurable learning rates
 - Advanced options: Batch Normalization, Dropout, Weight Decay
 - Initialization strategies: He, Xavier, Random
@@ -412,6 +412,10 @@ Mean Squared Error loss.
 **`MAE(y_true, y_pred)`**
 
 Mean Absolute Error loss.
+
+**`cross_entropy(y_true, y_pred)`**
+
+Cross-Entropy Error loss. 
 
 **`Huber(y_true, y_pred, delta)`**
 
