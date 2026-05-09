@@ -128,7 +128,7 @@ class TestCNN(unittest.TestCase):
 
     def setUp(self):
         """Initialize test fixtures before each test"""
-        self.model = CNN()
+        self.model = CNN(gpu=False)
         np.random.seed(42)
         self.X_train = np.random.randn(50, 3)
         self.y_train = np.random.randn(50, 2)
