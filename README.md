@@ -264,9 +264,11 @@ Main class for building and training multi-layer perceptrons.
 
 **`__init__(gpu)`**
 
-Initialize a SequentialModel.
+Initialize a `SequentialModel`.
 
-- `gpu` (bool): Enable GPU acceleration (requires CuPy)
+- `gpu` (bool): Enable GPU acceleration (requires CuPy) - If GPU is not available, SaANN automatically switches to CPU
+
+`SequentialModel` expects the input features (`X`) to be of shape `(batch, features)` and input targets (`y`) to be of shape `(batch, 1)` if regression, or a one-hot encoded array of shape `(batch, classes)` if classification.
 
 **`construct(layers_info, learning_rate, batch_norm, dropout)`**
 
@@ -276,6 +278,10 @@ Builds the network architecture.
 - `learning_rate` (float): Learning rate for optimization
 - `batch_norm` (bool): Enables batch normalization
 - `dropout` (bool): Enables dropout
+
+- Note:
+    - if you are training a regression model, it is recommended to have as the last MLP layer: `(previous_layer_neurons, 1, "linear", "he")`
+    - if you are training a classification model, it is recommended to to have as the last MLP layer: `(previous_layer_neurons, num_classes, "softmax", "he")` - this will override the selected loss function to `cross-entropy`
 
 **`fit(X, y, epochs, batch_size, wd, loss_function, graphical, real_time, log_plot)`**
 
@@ -326,15 +332,26 @@ Experimental but fully functional convolutional neural network for image classif
 
 #### Methods
 
-**`__init__(filter_size, num_filters, padding, stride, gpu)`**
+**`__init__(filter_size, num_filters, padding, stride, num_channels, activation_function, init_function, gpu)`**
 
 Initialize a CNN.
 
-- `filter_size` (int): Size of convolution filters
-- `num_filters` (int): Number of filters in the first conv layer
-- `padding` (int): Padding for convolutions
-- `stride` (int): Stride for convolutions
-- `gpu` (bool): Enable GPU acceleration (requires CuPy)
+- `filter_size` (int): Size of convolution filters - Default = 3
+- `num_filters` (int): Number of filters in the first conv layer - Default = 4
+- `padding` (int): Padding for convolutions - Default = 1
+- `stride` (int): Stride for convolutions - Default = 1
+- `num_channels` (int): Number of channels of the input images - Default = 3
+- `activation_function` (str): Activation function of ConvBlock - Default = "relu"
+- `init_function` (str): Initialization of the ConvBlock weights - Default = "he"
+- `gpu` (bool): Enable GPU acceleration (requires CuPy) - If GPU is not available, SaANN automatically switches to CPU
+
+SaANN’s CNN expects images in NHWC format `(batch, height, width, channels)`.
+The shapes of the input arrays need to follow:
+```python
+X.shape == (num_samples, height, width, num_channels)
+y.shape == (num_samples, num_classes)
+```
+**Important**: `y` needs to be one-hot encoded - you can use either the `ImageProcessing` class or the `one_hot_vector` function in *saann.processing*.
 
 **`construct(layers_info, learning_rate, batch_norm, dropout)`**
 
@@ -344,6 +361,8 @@ Builds the network architecture.
 - `learning_rate` (float): Learning rate for optimization
 - `batch_norm` (bool): Enables batch normalization
 - `dropout` (bool): Enables dropout
+
+The last layer should follow `(previous_layer_neurons, num_classes, "softmax", "he")`
 
 Build the network architecture (MLP head after convolutions).
 
@@ -391,8 +410,8 @@ Comprehensive metrics suite for model evaluation.
 
 Initialize metrics calculator.
 
-- `y_pred` (array): Predicted labels
-- `y_test` (array): True labels
+- `y_pred` (array): Predicted labels (probabilities, not logits)
+- `y_test` (array): True labels (one-hot encoded - use `saans.processing.one_hot_vector()` if needed)
 
 **`report(graphical, threshold_step)`**
 
@@ -493,23 +512,139 @@ Splits the dataset provided into Train and Test arrays
 - `split_test_percentage` (float): Test/Train split ratio
 - Returns: Tuple of (X_train, X_test, y_train, y_test)
 
+**`one_hot_vector(y)`**
+
+Format the `y` array for classification
+
+- `y` (array): Targets
+- Returns: Formatted targets (array)
+
 
 ### ImageProcessing
 
-Utilities for image dataset preparation.
+The ImageProcessing class prepares image datasets for use with SaANN’s CNN and MLP models.
+
+It handles:
+- directory scanning
+- resizing
+- cleaning (RGBA → RGB)
+- normalization
+- one‑hot encoding
+- shuffling
+- train/test splitting
+
+All images are returned in NHWC format:
+
+```python
+(batch, height, width, channels)
+```
 
 #### Methods
 
+**`prepare_images(size, amount)`**
+
+Resizes all images in the dataset.
+
+- `size` (int): output resolution (size × size)
+- `amount` (int): optional limit of images per class (can be `None`)
+
+
+- Creates a temporary folder: `resized/`
+- Saves all resized images as JPEG (`.jpg`)
+- Preserves class names using the folder structure
+
+Folder structure required:
+```bash
+dataset/
+    class1/
+    class2/
+    class3/
+    class4/
+    ...
+```
+
+**`image_upload(rel_path)`**
+
+Loads all resized images into memory.
+
+- Reads `.jpg` files from the `resized/` directory
+- Extracts class labels from filename prefixes (`class_index.jpg`)
+- Returns raw pixel arrays before cleaning
+
+**`clean_dataset(X, y)`**
+
+Ensures all images have valid channels.
+
+- Drops grayscale images (channels < 3)
+- Converts RGBA → RGB by removing the alpha channel
+- Keeps only 3‑channel images
+- Prints whether cleaning was required
+
+**`prepare_features(X=None)`**
+
+Normalizes image pixel values.
+
+- Converts to `float32`
+- Normalizes to the range [-0.5, 0.5]
+- Converts list of arrays into a single NumPy/CuPy array
+
+**Important**:  
+Do not normalize manually — SaANN does it automatically.
+
+**`prepare_targets(y=None, list_classes=None)`**
+
+Converts class labels into one‑hot encoded vectors.
+
+- Output shape: `(num_samples, num_classes)`
+- Required for all classification tasks
+- Class order is alphabetical unless overridden
+
+Example:
+```bash
+['daisy', 'rose', 'tulip'] → [1,0,0], [0,1,0], [0,0,1]
+```
+
+**`shuffle_dataset(X=None, y=None)`**
+
+Randomly shuffles features and labels together.
+
+- Ensures X and y stay aligned
+- Uses NumPy/CuPy permutation
+
 **`ready_dataset(size, amount, shuffle, remove_resized, split_test_percentage)`**
 
-Load and prepare an image dataset.
+Load and prepare an image dataset. It is the fill **default** image pre-processing pipeline
 
 - `size` (int): Resize images to size×size
 - `amount` (int): Maximum images per class. Can be None.
 - `shuffle` (bool): Shuffle the dataset
 - `remove_resized` (bool): Remove resized files after processing
 - `split_test_percentage` (float): Test/Train split ratio
-- Returns: Tuple of (X_train, X_test, y_train, y_test, class_names)
+- Returns: Tuple of `(X_train, X_test, y_train, y_test, class_names)`
+
+Where:
+
+- `X` has shape `(batch, height, width, channels)`
+- `y` is one‑hot encoded
+- `class_names` is a list of class labels
+
+Pipeline steps:
+
+1. Resize images
+2. Load resized images
+3. Clean channels
+4. Normalize features
+5. One‑hot encode labels
+6. Shuffle (optional)
+7. Train/test split (optional)
+8. Delete resized folder (optional)
+
+**Important**:
+- SaANN’s CNN expects images in NHWC format `(batch, height, width, channels)`
+- The CNN model has a parameter `num_channel` that allows to change the number of channels the input images have
+- It's default value is 3 but can be changed by the user
+- Be aware that if the data was processed using `ready_dataset` then `num_channel` MUST remain 3
+- If you change `num_channel`, please provide your own pre-processed data
 
 ### Scaling
 
