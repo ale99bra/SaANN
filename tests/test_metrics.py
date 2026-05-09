@@ -12,29 +12,29 @@ class TestMetrics(unittest.TestCase):
         self.classes = 5
         logits = np.random.randn(self.data, self.classes)
         exp_logits = np.exp(logits)
-        self.pred = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
-        self.true = np.random.randn(self.data, self.classes)
+        self.y_pred = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+        self.y_true = np.random.randn(self.data, self.classes)
 
     def create_dataset(self, classes, data):
         """Helper method to create a dataset for testing"""
         tmp = []
         if classes > 1:
-            for yi in self.true:
+            for yi in self.y_true:
                 one_hot = np.zeros_like(yi)
                 one_hot[np.argmax(yi)] = 1
                 tmp.append(one_hot)
-            self.true = np.asarray(tmp)
+            self.y_true = np.asarray(tmp)
         else:
             pred = np.random.randn(data, classes)
             pred += abs(np.min(pred))
             pred /= np.max(pred)
 
-            for yi in self.true:
+            for yi in self.y_true:
                 if yi >= 0.5:
                     tmp.append(1)
                 else:
                     tmp.append(0)
-            self.true = np.asarray(tmp).reshape(-1, 1)
+            self.y_true = np.asarray(tmp).reshape(-1, 1)
 
     def test_metrics_initialization(self):
         """Test that Metrics initializes correctly"""
