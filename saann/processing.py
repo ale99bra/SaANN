@@ -87,6 +87,18 @@ def train_test_split(X, y, split_test_percentage = 0.3):
 
     return X_train, X_test, y_train, y_test
 
+def one_hot_vector(y):
+    y_clip = []
+    try:
+        for yi in y:
+            one_hot = np.zeros_like(yi)
+            one_hot[np.argmax(yi)] = 1
+            y_clip.append(one_hot)
+        y = np.asarray(y_clip)
+    except:
+        raise ValueError("The given 'y' array is not in a compatible format for one-hot encoding.")
+    return y
+
 class Scaling:
     """
     Class for the different scalings
@@ -201,14 +213,8 @@ class ImageProcessing:
         self.num_images = amount
         list_dir = [f for f in listdir(self.path) if isdir(join(self.path, f))] 
 
-        if "resized" in list_dir: # if ran multiple times
+        if "resized" in list_dir: # needed if ran multiple times without deleting the resized folder
             list_dir.remove("resized")
-
-        try:
-            list_dir.remove("resized_tmp")
-        except:
-            pass
-            #print("Removed the 'resized' directory from the list.")
 
         print("List of directories: ", list_dir)
 
@@ -374,9 +380,9 @@ class ImageProcessing:
             import shutil
             try:
                 shutil.rmtree(self.res_path, ignore_errors=True)
-                #print(rf"{self.res_path} has been successfully deleted.")
+                print(rf"{self.res_path} has been successfully deleted.")
             except ImportError as e:
-                #print(rf"{self.res_path} has not been been deleted: {e}.")
+                print(rf"{self.res_path} has not been been deleted: {e}.")
                 pass
 
         if split_test_percentage == None:
