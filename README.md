@@ -1,12 +1,12 @@
-# SaANN — Self-Automated Artificial Neural Network
+# SaANN — Self-automated Artificial Neural Network
 
 [![Tests](https://github.com/ale99bra/SaANN/workflows/Run%20Tests/badge.svg)](https://github.com/ale99bra/SaANN/actions)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN provides transparent implementations of MLPs and CNNs, with optional GPU acceleration and comprehensive metrics for learning and experimentation.
 
-**⚠️ Important**: SaANN is designed for learning, not production. The test suite is NOT yet updated for v0.2.0 — some tests may fail until the new architecture is fully integrated.
+**⚠️ Important**: SaANN is designed for learning, not production.
 
 ## Features
 
