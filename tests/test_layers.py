@@ -16,6 +16,7 @@ class TestLayer(unittest.TestCase):
     def test_layer_initialization(self):
         """Test that layer initializes correctly"""
         layer = DenseLayer(
+            extras=[True, True],
             num_inputs=self.input_size,
             num_neurons=self.output_size,
             activation_function="relu",
@@ -29,6 +30,7 @@ class TestLayer(unittest.TestCase):
     def test_layer_forward_pass(self):
         """Test layer forward pass"""
         layer = DenseLayer(
+            extras=[False, True],
             num_inputs=self.input_size,
             num_neurons=self.output_size,
             activation_function="relu",
@@ -44,6 +46,7 @@ class TestLayer(unittest.TestCase):
     def test_layer_backward_pass(self):
         """Test layer backward pass"""
         layer = DenseLayer(
+            extras=[True, False],
             num_inputs=self.input_size,
             num_neurons=self.output_size,
             activation_function="relu",
@@ -66,6 +69,7 @@ class TestLayer(unittest.TestCase):
     def test_layer_weight_shapes(self):
         """Test that layer weights have correct shapes"""
         layer = DenseLayer(
+            extras=[False, False],
             num_inputs=self.input_size,
             num_neurons=self.output_size,
             activation_function="sigmoid",
@@ -82,6 +86,7 @@ class TestLayer(unittest.TestCase):
         for activation in activations:
             with self.subTest(activation=activation):
                 layer = DenseLayer(
+                    extras=[False, False],
                     num_inputs=self.input_size,
                     num_neurons=self.output_size,
                     activation_function=activation,
