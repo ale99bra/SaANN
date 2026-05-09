@@ -173,7 +173,8 @@ class TestCNN(unittest.TestCase):
     def test_construct_sets_learning_rate(self):
         """Test that construct sets learning rate"""
         input_size = self.model.get_input_size(self.X_train)
-        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        num_neurons = input_size//2 + self.y_train.shape[1]
+        layers_info = [(input_size, num_neurons, "relu", "he"), (num_neurons, self.y_train.shape[1], "softmax", "he")]
         learning_rate = 0.001
         self.model.construct(layers_info, learning_rate=learning_rate)
         
@@ -182,7 +183,8 @@ class TestCNN(unittest.TestCase):
     def test_fit_trains_without_error(self):
         """Test that fit method trains the model without errors"""
         input_size = self.model.get_input_size(self.X_train)
-        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        num_neurons = input_size//2 + self.y_train.shape[1]
+        layers_info = [(input_size, num_neurons, "relu", "he"), (num_neurons, self.y_train.shape[1], "softmax", "he")]
         self.model.construct(layers_info, learning_rate=0.01)
         
         # Should not raise any exception
@@ -199,7 +201,8 @@ class TestCNN(unittest.TestCase):
     def test_predict_returns_correct_shape(self):
         """Test that predict returns correct output shape"""
         input_size = self.model.get_input_size(self.X_train)
-        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        num_neurons = input_size//2 + self.y_train.shape[1]
+        layers_info = [(input_size, num_neurons, "relu", "he"), (num_neurons, self.y_train.shape[1], "softmax", "he")]
         self.model.construct(layers_info, learning_rate=0.01)
         self.model.fit(
             self.X_train, 
@@ -216,7 +219,8 @@ class TestCNN(unittest.TestCase):
     def test_predict_returns_numpy_array(self):
         """Test that predict returns a numpy array"""
         input_size = self.model.get_input_size(self.X_train)
-        layers_info = [(input_size, 10, "relu", "he"), (10, 1, "softmax", "he")]
+        num_neurons = input_size//2 + self.y_train.shape[1]
+        layers_info = [(input_size, num_neurons, "relu", "he"), (num_neurons, self.y_train.shape[1], "softmax", "he")]
         self.model.construct(layers_info, learning_rate=0.01)
         self.model.fit(
             self.X_train, 
