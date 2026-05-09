@@ -346,7 +346,10 @@ class Metrics:
                 continue
             print(names_rep[i], "|", ", ".join([f"{item[i]:.3f}" for item in report_array]))
         print("------------------")
-        print(f"Macro F1: {macro_F1:.3f}\nWeighted F1: {weight_F1:.3f}\nMCC: {mcc:.3f}")
+        try:
+            print(f"Macro F1: {macro_F1:.3f}\nWeighted F1: {weight_F1:.3f}\nMCC: {mcc:.3f}")
+        except:
+            print(f"Macro F1: {macro_F1:.3f}\nWeighted F1: {weight_F1[0]:.3f}\nMCC: {mcc:.3f}")
         print()
 
         fig = plt.figure(figsize=(13,6))
@@ -399,7 +402,7 @@ class Metrics:
         self.report_flag = False
 
 if __name__ == "__main__":
-    classes = 11
+    classes = 5
     data = 1000
     logits = np.random.randn(data, classes)
     exp_logits = np.exp(logits)
