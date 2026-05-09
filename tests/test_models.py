@@ -131,7 +131,7 @@ class TestCNN(unittest.TestCase):
         self.model = CNN(gpu=False)
         np.random.seed(42)
         self.X_train = np.random.randn(8, 5, 5, 3)
-        self.y_train = np.random.randn(8, 5, 5, 3)
+        self.y_train = np.random.randn(8, 4)
         self.X_test = np.random.randn(8, 5, 5, 3)
 
         """data = [
