@@ -628,4 +628,3 @@ If you encounter any issues or have questions:
 1. Check the `examples/` directory for usage patterns
 2. Review the inline code documentation
 3. Open an issue on GitHub with a detailed description
-4. Note: Some tests may fail as they haven't been updated for v0.2.0 yet
