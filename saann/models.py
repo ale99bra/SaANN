@@ -123,7 +123,7 @@ def load_model(path):
             elif model["model"] == "SequentialModel":
                 model_import = load_Sequential_model(path)
             else:
-                raise KeyError(f"Couldn't recognize model '{model["model"]}'.")
+                raise KeyError(f"Couldn't recognize model '{model['model']}'.")
             return model_import
     except ImportError as e:
         raise ValueError("Couldn't load model:", e)
