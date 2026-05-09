@@ -44,6 +44,9 @@ class TestMetrics(unittest.TestCase):
     def test_report_runs_without_error(self):
         """Test that report method runs without errors"""
         for classes in [1, 2, 5]:
+            logits = np.random.randn(self.data, classes)
+            exp_logits = np.exp(logits)
+            self.y_pred = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
             self.y_true = np.random.randn(self.data, classes)
             with self.subTest(classes=classes):
                 self.create_dataset(classes=classes, data=self.data)
