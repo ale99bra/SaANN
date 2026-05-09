@@ -228,7 +228,7 @@ SaANN/
     ├── activation_functions.py                     # Activation functions (ReLU, Sigmoid, etc.)
     ├── gradients.py                                # Gradient computations
     ├── initiations.py                              # Weight initialization (He, Xavier, Random)
-    ├── layers.py                                   # Layer implementations (Dense, Conv2D, BatchNorm, etc.)
+    ├── layers.py                                   # Layer implementations (Dense, BatchNorm, etc.)
     ├── losses.py                                   # Loss functions (MSE, MAE, Huber)
     ├── models.py                                   # Model classes (SequentialModel, CNN, load_model)
     ├── processing.py                               # Data preprocessing & ImageProcessing utilities
@@ -254,18 +254,28 @@ SaANN/
 
 ## API Documentation
 
+### *Models*
+
 ### SequentialModel (MLP)
 
 Main class for building and training multi-layer perceptrons.
 
 #### Methods
 
-**`construct(layers_info, learning_rate)`**
+**`__init__(gpu)`**
+
+Initialize a SequentialModel.
+
+- `gpu` (bool): Enable GPU acceleration (requires CuPy)
+
+**`construct(layers_info, learning_rate, batch_norm, dropout)`**
 
 Builds the network architecture.
 
 - `layers_info` (list): List of tuples `(input_size, neurons, activation, initialization)`
 - `learning_rate` (float): Learning rate for optimization
+- `batch_norm` (bool): Enables batch normalization
+- `dropout` (bool): Enables dropout
 
 **`fit(X, y, epochs, batch_size, wd, loss_function, graphical, real_time, log_plot)`**
 
@@ -325,7 +335,14 @@ Initialize a CNN.
 - `stride` (int): Stride for convolutions
 - `gpu` (bool): Enable GPU acceleration (requires CuPy)
 
-**`construct(layers_info, learning_rate)`**
+**`construct(layers_info, learning_rate, batch_norm, dropout)`**
+
+Builds the network architecture.
+
+- `layers_info` (list): List of tuples `(input_size, neurons, activation, initialization)`
+- `learning_rate` (float): Learning rate for optimization
+- `batch_norm` (bool): Enables batch normalization
+- `dropout` (bool): Enables dropout
 
 Build the network architecture (MLP head after convolutions).
 
@@ -348,24 +365,31 @@ Make predictions on new images.
 - `X` (array): Input images
 - Returns: Predictions (array)
 
-**`save_model(path)` and `load_model(path)`**
+**`save_model(path)`**
 
-Save and load models with automatic type detection.
+Save the model's architecture and weights in a pickle file
+- `path` (str): File path for output
 
-### Metrics
+### `load_model(path)`
+
+Load the model saved using the model.save_model(path) method. It automatically detects the type of model saved. 
+
+### *Metrics*
 
 Comprehensive metrics suite for model evaluation.
 
+### Metrics
+
 #### Methods
 
-**`Metrics(y_pred, y_test)`**
+**`__init__(y_pred, y_test)`**
 
 Initialize metrics calculator.
 
 - `y_pred` (array): Predicted labels
 - `y_test` (array): True labels
 
-**`report()`**
+**`report(graphical, threshold_step)`**
 
 Print a full metrics summary including:
 
@@ -373,6 +397,96 @@ Print a full metrics summary including:
 - Balanced Accuracy, Specificity, MCC
 - Confusion Matrix
 - ROC curves (One-vs-Rest for multi-class)
+
+- `graphical` (bool): Plots ROC curves and heatmap of the confusion matrix
+- `threshold_step` (float): Step used to increment from 0 to 1 for ROC calculation
+
+**`confusion_matrix(graphical)`**
+
+Calculate the confusion matrix
+
+- `graphical` (bool): Plots the heatmap of the confusion matrix
+- Returns: Confusion matrix (array)
+
+**`precision()`**
+
+Calculate precision for each class
+
+- Returns: Precisions (array)
+
+**`recall()`**
+
+Calculate sensitivity for each class
+
+- Returns: Recalls (array)
+
+**`F1score()`**
+
+Calculate the F1-score for each class
+
+- Returns: F1-scores (array)
+
+**`macro_f1()`**
+
+Calculate the Macro F1-score for each class
+
+- Returns: Macro F1-scores (float)
+
+**`micro_f1()`**
+
+Calculate the Micro F1-score for each class
+
+- Returns: Micro F1-scores (float)
+
+**`weighted_f1()`**
+
+Calculate the Weighted F1-score for each class
+
+- Returns: Weighted F1-scores (float)
+
+**`AUC(graphical, threshold_step)`**
+
+Calculate the macro-averaged AUC
+
+- `graphical` (bool): Plots ROC curves
+- `threshold_step` (float): Step used to increment from 0 to 1 for ROC calculation
+- Returns: Macro-averaged AUC (float)
+
+**`balanced_accuracy()`**
+
+Calculate balanced accuracy for each class
+
+- Returns: Balanced accuracy (array)
+
+**`specificity()`**
+
+Calculate specificity for each class
+
+- Returns: Specificity (array)
+
+**`cohen_kappa()`**
+
+Calculate Cohen's kappa for each class
+
+- Returns: Cohen's kappa (float)
+
+**`MCC()`**
+
+Calculate Matthews correlation coefficient for each class
+
+- Returns: Matthews correlation coefficient (float)
+
+### *Processing*
+
+**`train_test_split(X, y, split_test_percentage = 0.3)`**
+
+Splits the dataset provided into Train and Test arrays
+
+- `X` (array): Features
+- `y` (array): Targets
+- `split_test_percentage` (float): Test/Train split ratio
+- Returns: Tuple of (X_train, X_test, y_train, y_test)
+
 
 ### ImageProcessing
 
@@ -385,7 +499,7 @@ Utilities for image dataset preparation.
 Load and prepare an image dataset.
 
 - `size` (int): Resize images to size×size
-- `amount` (int): Maximum images per class
+- `amount` (int): Maximum images per class. Can be None.
 - `shuffle` (bool): Shuffle the dataset
 - `remove_resized` (bool): Remove resized files after processing
 - `split_test_percentage` (float): Test/Train split ratio
@@ -403,7 +517,7 @@ Apply respective scaling transformations to features.
 
 - `x` (array): Features to scale
 
-### Loss Functions
+### *Losses*
 
 **`MSE(y_true, y_pred)`**
 
