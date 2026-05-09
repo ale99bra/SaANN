@@ -130,11 +130,11 @@ class TestCNN(unittest.TestCase):
         """Initialize test fixtures before each test"""
         self.model = CNN(gpu=False)
         np.random.seed(42)
-        #self.X_train = np.random.randn(50, 3)
-        #self.y_train = np.random.randn(50, 2)
-        #self.X_test = np.random.randn(20, 3)
+        self.X_train = np.random.randn(8, 5, 5, 3)
+        self.y_train = np.random.randn(8, 5, 5, 3)
+        self.X_test = np.random.randn(8, 5, 5, 3)
 
-        data = [
+        """data = [
             [[[-0.34313726, -0.23725489, -0.19411764], 
             [-0.34705883, -0.24117646, -0.1980392 ],
             [-0.3509804 , -0.24509802, -0.20196077]],
@@ -157,7 +157,7 @@ class TestCNN(unittest.TestCase):
             
         self.X_train = np.array(data)
         self.X_test = np.array(data[0])
-        self.y_train = np.array([[0., 0., 1., 0.],[1., 0., 0., 0.]])
+        self.y_train = np.array([[0., 0., 1., 0.],[1., 0., 0., 0.]])"""
 
         y_clip = []
         for yi in self.y_train:
