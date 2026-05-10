@@ -3,12 +3,34 @@
 # Licensed under the MIT License
 
 import numpy as np
+import matplotlib.pyplot as plt
 import warnings
 try:
     from . import backend as BE
 except:
     import backend as BE
 
+def correlation(X, labels=None, graphical = True):
+    X = BE.to_numpy(X)
+    corr = np.corrcoef(X, rowvar=False)
+    if graphical:
+        fig, ax = plt.subplots(1, 1, figsize=(6, 6), layout='constrained')
+        plt.imshow(corr, cmap="coolwarm")
+        plt.colorbar()
+        plt.title("Correlation Matrix")
+        if labels is not None:
+            ax.set_xticks(np.arange(len(labels)), labels, rotation=45)
+            ax.set_yticks(np.arange(len(labels)), labels)
+        else:
+            ax.set_xticks(np.arange(corr.shape[0]), np.arange(1, corr.shape[0]+1))
+            ax.set_yticks(np.arange(corr.shape[0]), np.arange(1, corr.shape[0]+1))
+        ax.xaxis.set_ticks_position('top')
+        for i in range(corr.shape[0]):
+            for j in range(corr.shape[0]):
+                value = f"{corr[i, j]:.1f}"
+                ax.text(j, i, value, ha="center", va="center")
+        plt.show()
+    return corr
 
 class Metrics:
 
@@ -57,7 +79,6 @@ class Metrics:
                 self.TN.append(np.sum(self.conf_matrix) - (self.TP[i] + self.FP[i] + self.FN[i]))
         
         if graphical:
-            import matplotlib.pyplot as plt
             plt.imshow(self.conf_matrix, cmap="coolwarm")
             if self.y_test.shape[1] == 1:
                 plt.xticks([0, 1], labels=["Positive", "Negative"])
@@ -262,7 +283,6 @@ class Metrics:
             macro_auc = np.mean(auc_scores)
 
             if graphical:
-                import matplotlib.pyplot as plt
                 plt.figure(figsize=(8,6))
                 for k in range(self.y_test.shape[1]):
                     plt.plot(roc_scores[k][0], roc_scores[k][1], label = f"Class {k+1}: AUC = {auc_scores[k]:.3g}")
@@ -305,7 +325,6 @@ class Metrics:
                 auc = np.trapezoid(tpr_sorted, fpr_sorted)
 
             if graphical:
-                import matplotlib.pyplot as plt
                 plt.plot(fpr_sorted, tpr_sorted)
                 plt.title(f"ROC curve: AUC = {auc:.3g}")
                 plt.xlabel("FPR")
@@ -318,7 +337,6 @@ class Metrics:
                 return auc
 
     def report(self, graphical = True, threshold_step = 5e-3):
-        import matplotlib.pyplot as plt
 
         self.report_flag = True
         conf_matrix = self.confusion_matrix()
