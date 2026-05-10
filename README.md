@@ -402,6 +402,15 @@ Load the model saved using the model.save_model(path) method. It automatically d
 
 Comprehensive metrics suite for model evaluation.
 
+### **`correlation(X, labels, graphical)`**
+
+Calculates and return the correlation matrix of the features array
+
+- `X` (array): Features array
+- `labels` (list): List of features' labels - Default is None
+- `graphical` (bool): Plots the correlation matrix as a heatmap - Default is True
+- Returns: Correlation matrix (array)
+
 ### Metrics
 
 #### Methods
