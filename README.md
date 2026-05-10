@@ -6,7 +6,7 @@
 
 An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN provides transparent implementations of MLPs and CNNs, with optional GPU acceleration and comprehensive metrics for learning and experimentation.
 
-**⚠️ Important**: SaANN is designed for learning, not production.
+**⚠️ Important**: SaANN is designed for personal learning, not production. This project was created as an exercise to deepen my understanding of neural networks. While others are welcome to explore or use it, its primary purpose is educational for myself.
 
 ## Features
 
