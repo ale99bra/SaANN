@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Alessio Branda
 # Licensed under the MIT License
 
-import numpy as np
+import warnings
 from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
@@ -54,15 +54,6 @@ class DenseLayer:
         self.num_inputs = num_inputs
         self.num_neurons = num_neurons
         self.activation = activation_function
-
-        """
-        NOTE: we are now working with 2D vectors (matrix). 
-        The weights matrix is organized:
-            - columns: weights for each neuron
-            - rows: connection of each input to all neurons
-
-        The biases vection is 1D: is a row vector with one bias per neuron
-        """
 
     def forward(self, inputs):
         """
@@ -295,3 +286,119 @@ class MLP:
             curr_d_loss = layer.backward(curr_d_loss, wd)
 
         return curr_d_loss
+    
+class RNNLayer:
+
+    def __init__(self, input_dim, hidden_dim, activation_function="tanh", init_function = "xavier", random_scale = 0.01):
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.activation = activation_function
+
+        # activation function
+        if self.activation == "sigmoid":
+            warnings.warn(message="The 'sigmoid' activation function tends to produce vanishing gradients. 'tanh' activation is recommended for RNN.", category=UserWarning)
+            self.act_function = AF.sigmoid
+            self.d_act = AF.sigmoid_der
+        elif self.activation == "relu":
+            warnings.warn(message="The 'relu' activation function tends to produce exploding gradients. 'tanh' activation is recommended for RNN.", category=UserWarning)
+            self.act_function = AF.reLU
+            self.d_act = AF.reLU_der
+        elif self.activation == "softmax":
+            raise ValueError("'softmax' activation not allowed. 'tanh' activation is recommended for RNN.")
+        elif self.activation == "linear":
+            warnings.warn(message="The 'linear' activation function tends to be undtable if initiation not suitable. 'tanh' activation is recommended for RNN.", category=UserWarning)
+            self.act_function = AF.linear
+            self.d_act = AF.linear_der
+        elif self.activation == "tanh":
+            self.act_function = AF.tanh
+            self.d_act = AF.tanh_der
+        else:
+            raise ValueError(f"Activation function '{self.activation}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh' (recommended) or 'linear'.")
+
+        # initialize weights
+        if init_function == "random":
+            warnings.warn(message="The 'random' initiation is unstable. 'xavier' initiation is recommended for RNN.", category=UserWarning)
+            self.weights_xh = In.random_scaled_init(num_inputs=input_dim, num_neurons=hidden_dim, scale=random_scale)
+            self.weights_hh = In.random_scaled_init(num_inputs=hidden_dim, num_neurons=hidden_dim, scale=random_scale)
+        elif init_function in ("xavier", "glorot"):
+            self.weights_xh = In.xavier_init(num_inputs=input_dim, num_neurons=hidden_dim)
+            self.weights_hh = In.xavier_init(num_inputs=hidden_dim, num_neurons=hidden_dim)
+        elif init_function in ("he", "kaiming"):
+            warnings.warn(message="The 'he' initiation tends to explode. 'xavier' initiation is recommended for RNN.", category=UserWarning)
+            self.weights_xh = In.he_init(num_inputs=input_dim, num_neurons=hidden_dim)
+            self.weights_hh = In.he_init(num_inputs=hidden_dim, num_neurons=hidden_dim)
+        else:
+            raise ValueError(f"Initialization function '{init_function}' not found.\nPlease choose: 'random', 'xavier' (recommended) or 'he'.")
+
+        self.biases_h  = BE.xp.zeros((1, hidden_dim))
+
+        # Gradients
+        self.d_Wxh = None
+        self.d_Whh = None
+        self.d_bh  = None
+
+    def forward(self, X):
+        # X: (batch, seq_len, input_dim)
+        # return: h_seq (batch, seq_len, hidden_dim), cache
+        batch, seq_len, _ = X.shape
+
+        H = BE.xp.zeros((batch, seq_len, self.hidden_dim))
+        h_prev = BE.xp.zeros((batch, self.hidden_dim))
+
+        cache = {"X": X, "H": [], "h_prev": [], "Z": []}
+
+        for t in range(seq_len):
+            x_t = X[:, t, :]
+            z_t = x_t @ self.weights_xh + h_prev @ self.weights_hh + self.biases_h
+            h_t = self.act_function(z_t)
+            
+            H[:, t, :] = h_t
+
+            cache["Z"].append(z_t)
+            cache["H"].append(h_t)
+            cache["h_prev"].append(h_prev)
+            h_prev = h_t
+
+        return H, cache
+
+    def backward(self, dH, cache):
+        X = cache["X"]
+        H_list = cache["H"]
+        h_prev_list = cache["h_prev"]
+
+        batch, seq_len, _ = X.shape
+
+        d_Wxh = BE.xp.zeros_like(self.weights_xh)
+        d_Whh = BE.xp.zeros_like(self.weights_hh)
+        d_bh  = BE.xp.zeros_like(self.biases_h)
+
+        d_X = BE.xp.zeros_like(X)
+        d_h_next = BE.xp.zeros((batch, self.hidden_dim))
+
+        for t in reversed(range(seq_len)):
+            h_t = H_list[t]
+            h_prev = h_prev_list[t]
+
+            # total gradient at this timestep
+            d_h = dH[:, t, :] + d_h_next
+
+            # derivative of activation
+            d_activ = self.d_act(h_t) * d_h
+
+            # gradients
+            d_Wxh += X[:, t, :].T @ d_activ
+            d_Whh += h_prev.T @ d_activ
+            d_bh += d_activ.sum(axis=0, keepdims=True)
+
+            # gradient wrt inputs
+            d_X[:, t, :] = d_activ @ self.weights_xh.T
+
+            # gradient wrt previous hidden state
+            d_h_next = d_activ @ self.weights_hh.T
+
+        # store gradients
+        self.d_Wxh = d_Wxh
+        self.d_Whh = d_Whh
+        self.d_bh  = d_bh
+
+        return d_X

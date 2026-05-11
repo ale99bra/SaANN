@@ -8,7 +8,7 @@ import datetime
 import pickle
 from . import losses
 from .gradients import SGD
-from .layers import MLP, DenseLayer
+from .layers import MLP, DenseLayer, RNNLayer
 from .processing import Scaling, train_test_split
 import warnings
 import matplotlib.pyplot as plt
@@ -16,7 +16,8 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
+LIST_VERSIONS_COMPATIBLE = ["0.2.0", VERSION]
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -169,7 +170,7 @@ class SequentialModel:
 
     def __init__(self, gpu = False):
         self.mlp = None
-        self.optiomizer = None
+        self.optimizer = None
         self.learning_rate = None
         
         if gpu:
@@ -186,8 +187,10 @@ class SequentialModel:
         Constructs the Dense Layers of the Neural Network while initializing the SGD optimizer.\n
         Parameters
         ----------
-        :param layer_info: Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
-        :param learning_rate: Hyperparameter that controls the step size.\n
+        :param layer_info: *list* - Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
+        :param learning_rate: *float* - Hyperparameter that controls the step size.\n
+        :param batch_norm: *bool* - Allows batch normalization.
+        :param droput: *bool* - Allows dropout
 
         Example
         -------
@@ -203,26 +206,25 @@ class SequentialModel:
         if layers_info[-1][2].lower() == "softmax":
             print("The last layer of the MLP has 'softmax' activation. The model will use 'cross-entropy' as the loss function.")
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.01, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 1e-4, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
         ----------
-        :params X_train: X split for the training\n
-        :params y_train: y split for the training\n
-        :params epochs: Number of epochs\n
-        :params batch_size: Size of each batch\n
-        :params batch_size: Size of each batch\n
-        :params wd: Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
+        :params X_train: *array* - X split for the training\n
+        :params y_train: *array* - y split for the training\n
+        :params epochs: *int* - Number of epochs\n
+        :params batch_size: *int* - Size of each batch\n
+        :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
+        :params loss_function: *str* - Loss function to utilize during training ('mse', 'mae', 'cross-entropy', or 'huber' (or 'huber:delta' where delta is the hyperparameter. e.g. 'huber:1.3'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
-        :params graphical: Display the Loss graph at the end of the fitting\n
-        :params real_time: Display the Loss graph in real time\n
-        :params log_plot: Display the Loss graph in semilogy scale
+        :params graphical: *bool* - Display the Loss graph at the end of the fitting\n
+        :params real_time: *bool* - Display the Loss graph in real time\n
+        :params log_plot: *bool* - Display the Loss graph in semilogy scale
 
         Returns
         -------
-        :return final_pred_train: Final prediction during training
+        :return final_pred_train: *array* - Final prediction during training
 
         Example
         -------
@@ -255,9 +257,11 @@ class SequentialModel:
         elif loss_function.lower() == "huber":
             self.loss_func = losses.Huber
             self.loss_gradient = losses.Huber_der
-            #self.delta = float(input("For 'Huber' loss function an additional hyperparameter is needed.\n Please provide the threshold - quadratic to linear: "))
+        elif loss_function.lower() == "cross-entropy":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
         else:
-            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
+            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
 
 
         if real_time == True and graphical == False:
@@ -346,11 +350,11 @@ class SequentialModel:
         Make predictions using the testing features.\n
         Parameter
         ---------
-        :param X_test: Data array used for the testing of the model.
+        :param X_test: *array* - Data array used for the testing of the model.
 
         Return
         ------
-        :return y_pred: Prediction array
+        :return y_pred: *array* - Prediction array
 
         Example
         -------
@@ -363,37 +367,37 @@ class SequentialModel:
         y_pred = self.mlp.forward(X_test)
         return y_pred
     
-    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0.01, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, batch_norm = False, dropout = False, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
+    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 1e-4, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, batch_norm = False, dropout = False, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
         """
         Performs the *construction*, *fitting* and *prediction* based on the parameters given.\n
         Parameters
         ---------
-        :param X: Features array.\n
-        :param y: Target array.\n
-        :param layer_info: Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
-        :param learning_rate: Hyperparameter that controls the step size.\n
-        :param epochs: Number of iterations for the training loop.\n
-        :param batch_size: Size of the batches used in the training loop.\n
-        :params wd: Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
-        :param split_test_percentage: Percentage of the total array size used to obtain the Test arrays.\n
-        :param scaling: Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
+        :param X: *array* - Features array.\n
+        :param y: *array* - Target array.\n
+        :param layer_info: *list* - Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
+        :param learning_rate: *float* - Hyperparameter that controls the step size.\n
+        :param epochs: *int* - Number of iterations for the training loop.\n
+        :param batch_size: *int* - Size of the batches used in the training loop.\n
+        :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
+        :params loss_function: *str* - Loss function to utilize during training ('mse', 'mae', 'cross-entropy' or 'huber' (or 'huber:delta' where delta is the hyperparameter. e.g. 'huber:1.3'))\n
+        :param split_test_percentage: *float* - Percentage of the total array size used to obtain the Test arrays.\n
+        :param scaling: *str* - Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
         :param batch_norm: *bool* - Include batch normalization to the MLP architecture.\n
         :param dropout: *bool* - Include dropout to the MLP architecture.\n
-        :param graphical: Display the Loss graph at the end of the fitting.\n
-        :param real_time: Display the Loss graph in real time.\n
-        :param log_plot: Display the Loss graph in semilogy scale\n
-        :param test_loss: Prints the loss of the predicted and test data\n
-        :param scatter_comparison: Display the scatter plot Test vs. Predicted.\n
+        :param graphical: *bool* - Display the Loss graph at the end of the fitting.\n
+        :param real_time: *bool* - Display the Loss graph in real time.\n
+        :param log_plot: *bool* - Display the Loss graph in semilogy scale\n
+        :param test_loss: *bool* - Prints the loss of the predicted and test data\n
+        :param scatter_comparison: *bool* - Display the scatter plot Test vs. Predicted.\n
 
         Returns
         -------
-        :return y_pred: The model's predictions during testing
-        :return final_pred_train: Final prediction during training
-        :return X_train: Input array used in the training
-        :return X_test: Input array used in the testing
-        :return y_train: Target array used in the training
-        :return y_test: Target array used in the testing
+        :return y_pred: *array* - The model's predictions during testing
+        :return final_pred_train: *array* - Final prediction during training
+        :return X_train: *array* - Input array used in the training
+        :return X_test: *array* - Input array used in the testing
+        :return y_train: *array* - Target array used in the training
+        :return y_test: *array* - Target array used in the testing
 
         Example
         -------
@@ -509,8 +513,8 @@ class SequentialModel:
                 layers_info = model["layers_info"]
                 batch_size = model["batch_size"]
             
-            if version != VERSION:
-                raise ValueError(f"Current version {VERSION} of the model does not match loaded version {version}.")
+            if version not in LIST_VERSIONS_COMPATIBLE:
+                raise ValueError(f"Loaded model is of a version '{version}' - it is not compatible with current version {VERSION}. List of compatible versions {LIST_VERSIONS_COMPATIBLE}.")
             
             self.batch_size = batch_size
 
@@ -726,7 +730,7 @@ class CNN:
 
         def __init__(self, filter_size = 3, num_filters = 4, padding = 1, stride = 1, num_channels = 3, activation_function = "relu", init_function = "he", pool_size = 2):
             self.mlp = None
-            self.optiomizer = None
+            self.optimizer = None
             self.learning_rate = None
             self.filter_size = filter_size
             self.stride = stride
@@ -935,7 +939,7 @@ class CNN:
         self.conv1a.update(self.learning_rate, self.wd)
 
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 0.0001, graphical = False, real_time = False, log_plot = False, report = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 1e-4, graphical = False, real_time = False, log_plot = False, report = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
@@ -1404,8 +1408,8 @@ class CNN:
                 num_filters = model["num_filters"]
                 num_channels = model["num_channels"]
             
-            if version != VERSION:
-                raise ValueError(f"Current version {VERSION} of the model does not match loaded version {version}.")
+            if version not in LIST_VERSIONS_COMPATIBLE:
+                raise ValueError(f"Loaded model is of a version '{version}' - it is not compatible with current version {VERSION}. List of compatible versions {LIST_VERSIONS_COMPATIBLE}.")
 
             self.conv1a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = num_channels, activation_function = activation_function, init_function = init_function, pool_size = 2)
             self.conv2a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
@@ -1423,4 +1427,253 @@ class CNN:
         except ImportError as e:
             raise ValueError(e)
 
+class RecurrentModel:
+    def __init__(self, gpu=False):
+        self.layers = []
+        self.learning_rate = None
+        self.optimizer = None
+        
+        if gpu:
+            if BE.gpu_available:
+                print("Computing on GPU")
+                BE.use_gpu()
+            else:
+                print("GPU not available. Computing on CPU")
+                BE.use_cpu()
+        else:
+            print("Computing on CPU")
+            BE.use_cpu()
 
+    def construct(self, input_dim, hidden_dim, output_dim, activation_function, init_function = "he", learning_rate=0.001, random_scale = 0.01, act_function_rnn='tanh', init_function_rnn='xavier', random_scale_rnn=0.01, many_to_one=True, batch_norm = False, dropout = False):
+        """
+        Construct the RNN and Dense layers\n
+        Parameters
+        ----------
+        :params input_dim: *int* - Input dimensions
+        :params hidden_dim: *int* - Hidden dimensions
+        :params output_dim: *int* - Output dimensions
+        :params activation_function: *str* - Activation function for the Dense layer ()
+        Example
+        -------
+            >>> text = "hellohellohellohellohello"
+        >>> X, y, c2i, i2c, vocab = generate_text_dataset(text, seq_len=5) #external function
+        >>> model = RecurrentModel(gpu=False)
+        >>> model.construct(
+                input_dim=vocab,
+                hidden_dim=32,
+                output_dim=vocab,
+                activation_function="softmax",
+                act_function_rnn="tanh",
+                many_to_one=True
+            )
+        """
+        self.learning_rate = learning_rate
+        self.rnn = RNNLayer(input_dim=input_dim, hidden_dim=hidden_dim, activation_function=act_function_rnn, init_function=init_function_rnn, random_scale=random_scale_rnn)
+        self.dense = DenseLayer(extras= [batch_norm, dropout], num_inputs=hidden_dim, num_neurons=output_dim, activation_function=activation_function, init_function=init_function, random_scale=random_scale)
+        self.many_to_one = many_to_one
+        self.optimizer = SGD(learning_rate=learning_rate)
+
+    def forward(self, X):
+        H, cache = self.rnn.forward(X)
+        if self.many_to_one:
+            out = self.dense.forward(H[:, -1, :])
+        else:
+            out = self.dense.forward(H.reshape(-1, H.shape[-1]))
+        return out, cache
+
+    def backward(self, dOut, cache, wd = 1e-5):
+        d_H = self.dense.backward(dOut, wd=wd)
+        if self.many_to_one:
+            d_H_full = BE.xp.zeros((d_H.shape[0], cache["X"].shape[1], d_H.shape[1]))
+            d_H_full[:, -1, :] = d_H
+            d_X = self.rnn.backward(d_H_full, cache)
+        else:
+            d_H_seq = d_H.reshape(cache["X"].shape[0], cache["X"].shape[1], -1)
+            d_X = self.rnn.backward(d_H_seq, cache)
+        return d_X
+
+    def update(self, wd):
+        # SGD update
+        self.rnn.weights_xh -= self.learning_rate * (self.rnn.d_Wxh + wd * self.rnn.weights_xh)
+        self.rnn.weights_hh -= self.learning_rate * (self.rnn.d_Whh + wd * self.rnn.weights_hh)
+        self.rnn.biases_h  -= self.learning_rate * self.rnn.d_bh
+        self.optimizer.update(layer=self.dense)
+
+    def fit(self, X_train, y_train, epochs, batch_size=16, wd = 1e-4, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
+        """
+        Performs the train loop for each epoch.\n
+        Parameters
+        ----------
+        :params X_train: X split for the training\n
+        :params y_train: y split for the training\n
+        :params epochs: Number of epochs\n
+        :params batch_size: Size of each batch\n
+        :params batch_size: Size of each batch\n
+        :params wd: Hyperparameter for the model regularization (weight decay)\n
+        :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
+            N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
+        :params graphical: Display the Loss graph at the end of the fitting\n
+        :params real_time: Display the Loss graph in real time\n
+        :params log_plot: Display the Loss graph in semilogy scale
+
+        Returns
+        -------
+        :return final_pred_train: Final prediction during training
+
+        Example
+        -------
+            >>> text = "hellohellohellohellohello"
+        >>> X, y, c2i, i2c, vocab = generate_text_dataset(text, seq_len=5) #external function
+        >>> model = RecurrentModel(gpu=False)
+        >>> model.construct(
+                input_dim=vocab,
+                hidden_dim=32,
+                output_dim=vocab,
+                activation_function="softmax",
+                act_function_rnn="tanh",
+                many_to_one=True
+            )
+        >>> model.fit(X, y, epochs=100, batch_size=16, loss_function="cross-entropy", graphical=True)
+        """
+
+        num_samples = X_train.shape[0]
+        num_batches = (num_samples + batch_size - 1) // batch_size
+
+        try:
+            tmp = loss_function.split(sep=':')
+            self.delta = float(tmp[1])
+            loss_function = tmp[0]
+        except:
+            loss_function = tmp[0]
+            self.delta = 1
+
+        if self.dense.activation == "softmax":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+            if loss_function.lower() != "cross-entropy":
+                warnings.warn("For 'softmax' activation, the 'cross-entropy loss function is required. Switch applied automatically.", UserWarning)
+        elif loss_function.lower() == "mse":
+            self.loss_func = losses.MSE
+            self.loss_gradient = losses.MSE_der
+        elif loss_function.lower() == "mae":
+            self.loss_func = losses.MAE
+            self.loss_gradient = losses.MAE_der
+        elif loss_function.lower() == "huber":
+            self.loss_func = losses.Huber
+            self.loss_gradient = losses.Huber_der
+        elif loss_function.lower() == "cross-entropy":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+        else:
+            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
+
+
+        if real_time == True and graphical == False:
+            warnings.warn("The parameter graphical is set to False while real_time is True. Assuming graphical = True.")
+            graphical = True
+
+        if graphical:
+            loss_list = []
+        if real_time:
+            plt.figure()
+            plt.ion()
+
+        print(f"Training for {epochs} Epochs with learning rate: {self.learning_rate:.2g}")
+
+
+        for epoch in range(epochs):
+            # Shuffle the data at the beginning of each epoch
+            idx = BE.xp.random.permutation(num_samples)
+            X_shuffled = X_train[idx]
+            y_shuffled = y_train[idx]
+            
+            tot_loss = 0
+            
+            # Process data in mini-batches
+            for i in range(0, num_samples, batch_size):
+                X_batch = X_shuffled[i:i+batch_size]
+                y_batch = y_shuffled[i:i+batch_size]
+
+                
+                y_pred, cache = self.forward(X_batch)
+                try:
+                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
+                except:
+                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
+
+                tot_loss += BE.xp.mean(loss)
+                
+                try:
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
+                except:
+                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
+
+                self.backward(dOut = d_loss_wrt_pred, cache=cache, wd = wd)
+    
+                self.update(wd = wd)
+                
+            # Average loss over all batches for reporting
+            avg_loss = tot_loss / num_batches
+            if (epoch + 1) % (epochs // 10 if epochs >=10 else 1) == 0 or epoch == 0:
+                print(f"Epoch {epoch+1:4d}/{epochs}, Loss: {avg_loss:.5f}")
+            if graphical:
+                loss_list.append(avg_loss)
+            if real_time:
+                plt.clf()
+                if log_plot: plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+                else: plt.plot(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+                plt.title(f"Average loss ({num_batches} batches) over the epochs (current: {epoch})")
+                plt.xlabel("Epoch")
+                plt.ylabel("Average loss")
+                plt.pause(5e-3)
+
+        self.final_pred, cache = self.forward(X_train)
+        try:
+            self.final_loss = self.loss_func(y_train, self.final_pred)
+        except:
+            self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
+        if self.dense.activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
+        else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
+        if graphical:
+            plt.clf()
+            if real_time:plt.ioff()
+            if log_plot:plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+            else: plt.plot(BE.to_numpy(BE.xp.arange(1, epochs+1, step = 1)), BE.to_numpy(BE.xp.array(loss_list)), linestyle = '-')
+            plt.title(f"Average loss ({num_batches} batches) over the epochs")
+            plt.xlabel("Epoch")
+            plt.ylabel("Average loss")
+            plt.show()
+
+        return BE.to_numpy(self.final_pred)
+    
+    def predict(self, X_test):
+        """
+        Make predictions using the testing features.\n
+        Parameter
+        ---------
+        :param X_test: Data array used for the testing of the model.
+
+        Return
+        ------
+        :return y_pred: Prediction array
+
+        Example
+        -------
+            >>> text = "hellohellohellohellohello"
+        >>> X, y, c2i, i2c, vocab = generate_text_dataset(text, seq_len=5) #external function
+        >>> model = RecurrentModel(gpu=False)
+        >>> model.construct(
+                input_dim=vocab,
+                hidden_dim=32,
+                output_dim=vocab,
+                activation_function="softmax",
+                act_function_rnn="tanh",
+                many_to_one=True
+            )
+        >>> model.fit(X, y, epochs=100, batch_size=16, loss_function="cross-entropy", graphical=True)
+        >>> test_text = "hello"
+        >>> X_test, y_test, c2i, i2c, vocab = generate_text_dataset(test_text, seq_len=4)
+        >>> y_pred = model.predict(X_test)
+        """
+        y_pred, cache = self.forward(X_test)
+        return y_pred
