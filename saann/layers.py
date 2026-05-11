@@ -361,7 +361,7 @@ class RNNLayer:
 
         return H, cache
 
-    def backward(self, dH, cache):
+    def backward(self, d_H, cache):
         X = cache["X"]
         H_list = cache["H"]
         h_prev_list = cache["h_prev"]
@@ -380,7 +380,7 @@ class RNNLayer:
             h_prev = h_prev_list[t]
 
             # total gradient at this timestep
-            d_h = dH[:, t, :] + d_h_next
+            d_h = d_H[:, t, :] + d_h_next
 
             # derivative of activation
             d_activ = self.d_act(h_t) * d_h
@@ -402,3 +402,202 @@ class RNNLayer:
         self.d_bh  = d_bh
 
         return d_X
+    
+    def update(self, learning_rate, wd=1e-5):
+        self.weights_xh -= learning_rate * (self.d_Wxh + wd * self.weights_xh)
+        self.weights_hh -= learning_rate * (self.d_Whh + wd * self.weights_hh)
+        self.biases_h  -= learning_rate * self.d_bh
+
+    
+class GRULayer:
+
+    def __init__(self, input_dim, hidden_dim, init_function = "xavier"):
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        
+        if init_function == "random":
+            warnings.warn(message="The 'random' initiation is unstable. 'xavier' initiation is recommended for GRU.", category=UserWarning)
+            self.init_W = In.random_scaled_init
+        elif init_function in ("xavier", "glorot"):
+            self.init_W = In.xavier_init
+        elif init_function in ("he", "kaiming"):
+            warnings.warn(message="The 'he' initiation tends to explode. 'xavier' initiation is recommended for GRU.", category=UserWarning)
+            self.init_W = In.he_init
+        else:
+            raise ValueError(f"Initialization function '{init_function}' not found.\nPlease choose: 'random', 'xavier' (recommended) or 'he'.")
+        
+        # Update gate block
+        self.weights_W_z = self.init_W(input_dim, hidden_dim) 
+        self.weights_U_z = self.init_W(hidden_dim, hidden_dim)
+        self.biases_z = BE.xp.zeros((1, hidden_dim))
+        self.d_Wz = BE.xp.zeros_like(self.weights_W_z)
+
+        # Reset gate block
+        self.weights_W_r = self.init_W(input_dim, hidden_dim) 
+        self.weights_U_r = self.init_W(hidden_dim, hidden_dim)
+        self.biases_r = BE.xp.zeros((1, hidden_dim))
+        self.d_Wr = BE.xp.zeros_like(self.weights_W_r)
+
+        # Candidate hidden state block
+        self.weights_W_h = self.init_W(input_dim, hidden_dim) 
+        self.weights_U_h = self.init_W(hidden_dim, hidden_dim)
+        self.biases_h = BE.xp.zeros((1, hidden_dim))
+        self.d_Wh = BE.xp.zeros_like(self.weights_W_h)
+    
+    def forward(self, X, h0 = None):
+        """
+        Perform the forward pass of the GRU layer\n
+
+        Parameters
+        ----------
+        :param X: *array* - Data array of shape (batch, seq_len, input_dim)
+        :param h0: *array* - Starting point - can be None
+
+        Returns
+        -------
+        :param H: *array* - Hidden state array of shape (batch, seq_len, hidden_dim)
+        :cache: *dict* - Dictionary for the backend
+        """
+
+        batch_size, seq_len, _ = X.shape
+
+        if h0 is None:
+            h_t = BE.xp.zeros((batch_size, self.hidden_dim))
+            h0 = BE.xp.zeros_like(h_t)
+        else:
+            h_t = h0
+
+        H = BE.xp.zeros((batch_size, seq_len, self.hidden_dim))
+
+        z_list, r_list, h_tilde_list, h_list = [], [], [], []
+
+        for t in range(seq_len):
+            x_t = X[:, t, :]
+
+            z_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_z) + BE.xp.dot(h_t, self.weights_U_z) + self.biases_z)
+            r_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_r) + BE.xp.dot(h_t, self.weights_U_r) + self.biases_r)
+
+            h_tilde = AF.tanh(BE.xp.dot(x_t, self.weights_W_h) + BE.xp.dot(r_t * h_t, self.weights_U_h) + self.biases_h)
+
+            h_t = (1 - z_t) * h_tilde + z_t * h_t
+
+            H[:, t, :] = h_t
+
+            z_list.append(z_t)
+            r_list.append(r_t)
+            h_tilde_list.append(h_tilde)
+            h_list.append(h_t)
+
+        cache = {
+            "X": X,
+            "z": z_list,
+            "r": r_list,
+            "h_tilde": h_tilde_list,
+            "h": h_list,
+            "h0": h0
+        }
+
+        return H, cache        
+
+    def backward(self, d_H, cache):
+        X = cache["X"]
+        batch, seq_len, _ = X.shape
+
+        # Update gate block
+        self.d_Wz = BE.xp.zeros_like(self.weights_W_z)
+        self.d_Uz = BE.xp.zeros_like(self.weights_U_z)
+        self.d_bz = BE.xp.zeros_like(self.biases_z)
+        z_list = cache["z"]
+
+        # Reset gate block
+        self.d_Wr = BE.xp.zeros_like(self.weights_W_r)
+        self.d_Ur = BE.xp.zeros_like(self.weights_U_r)
+        self.d_br = BE.xp.zeros_like(self.biases_r)
+        r_list = cache["r"]
+
+        # Hidden state block
+        self.d_Wh = BE.xp.zeros_like(self.weights_W_h)
+        self.d_Uh = BE.xp.zeros_like(self.weights_U_h)
+        self.d_bh = BE.xp.zeros_like(self.biases_h)
+        h_tilde_list = cache["h_tilde"]
+
+        h_list = cache["h"]
+        h0 = cache["h0"]
+
+        d_X = BE.xp.zeros_like(X)
+        d_h_next = BE.xp.zeros((batch, self.hidden_dim))
+
+        for t in reversed(range(seq_len)):
+            x_t = X[:, t, :]
+            h_t = h_list[t]
+            h_prev = h_list[t-1] if t > 0 else h0
+            z_t = z_list[t]
+            r_t = r_list[t]
+            h_tilde = h_tilde_list[t]
+
+            # total gradient at this timestep
+            d_h = d_H[:, t, :] + d_h_next
+
+            # gradients h_prev
+            d_h_tilde = d_h * (1 - z_t)
+            d_z = d_h * (h_prev - h_tilde)
+            d_h_prev = d_h * z_t
+
+            # gradient of h_tilde
+            d_h_tilde_raw = AF.tanh_der(h_tilde) * d_h_tilde
+
+            # gradient of z
+            d_z_raw = AF.sigmoid_der(z_t) * d_z
+
+            # gradient of z
+            d_r = BE.xp.dot(d_h_tilde_raw, self.weights_U_h.T) * h_prev
+            d_r_raw = d_r * r_t * (1 - r_t)
+
+            # gradient wrt parameters
+            # Update gate
+            self.d_Wz += BE.xp.dot(x_t.T, d_z_raw)
+            self.d_Uz += BE.xp.dot(h_prev.T, d_z_raw)
+            self.d_bz += BE.xp.sum(d_z_raw, axis=0, keepdims=True)
+
+            # Reset gate
+            self.d_Wr += BE.xp.dot(x_t.T, d_r_raw)
+            self.d_Ur += BE.xp.dot(h_prev.T, d_r_raw)
+            self.d_br += BE.xp.sum(d_r_raw, axis=0, keepdims=True)
+
+            # Candidate hidden state
+            self.d_Wh += BE.xp.dot(x_t.T, d_h_tilde_raw)
+            self.d_Uh += BE.xp.dot((r_t * h_prev).T, d_h_tilde_raw)
+            self.d_bh += BE.xp.sum(d_h_tilde_raw, axis=0, keepdims=True)
+
+            # gradients wrt inputs
+            d_X[:, t, :] = (
+                BE.xp.dot(d_z_raw, self.weights_W_z.T) +
+                BE.xp.dot(d_r_raw, self.weights_W_r.T) +
+                BE.xp.dot(d_h_tilde_raw, self.weights_W_h.T)
+            )
+
+            # gradient wrt previous hidden state
+            d_h_prev += (
+                BE.xp.dot(d_z_raw, self.weights_U_z.T) + 
+                BE.xp.dot(d_r_raw, self.weights_U_r.T) + 
+                BE.xp.dot(d_h_tilde_raw, self.weights_U_h.T) * r_t 
+            )
+
+            d_h_next = d_h_prev
+
+        return d_X
+    
+    def update(self, learning_rate, wd = 1e-5):
+        for W, d_W in [
+            (self.weights_W_z, self.d_Wz),
+            (self.weights_U_z, self.d_Uz),
+            (self.weights_W_r, self.d_Wr),
+            (self.weights_U_r, self.d_Ur),
+            (self.weights_W_h, self.d_Wh),
+            (self.weights_U_h, self.d_Uh),
+        ]:
+            W -= learning_rate * (d_W + wd * W)
+
+        self.biases_z -= learning_rate * self.d_bz
+        self.biases_r -= learning_rate * self.d_br
+        self.biases_h -= learning_rate * self.d_bh

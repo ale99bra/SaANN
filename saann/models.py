@@ -8,7 +8,7 @@ import datetime
 import pickle
 from . import losses
 from .gradients import SGD
-from .layers import MLP, DenseLayer, RNNLayer
+from .layers import MLP, DenseLayer, RNNLayer, GRULayer
 from .processing import Scaling, train_test_split
 import warnings
 import matplotlib.pyplot as plt
@@ -1428,10 +1428,11 @@ class CNN:
             raise ValueError(e)
 
 class RecurrentModel:
-    def __init__(self, gpu=False):
+    def __init__(self, rnn_type = 'gru', gpu=False):
         self.layers = []
         self.learning_rate = None
         self.optimizer = None
+        self.rnn_type = rnn_type
         
         if gpu:
             if BE.gpu_available:
@@ -1468,7 +1469,10 @@ class RecurrentModel:
             )
         """
         self.learning_rate = learning_rate
-        self.rnn = RNNLayer(input_dim=input_dim, hidden_dim=hidden_dim, activation_function=act_function_rnn, init_function=init_function_rnn, random_scale=random_scale_rnn)
+        if self.rnn_type == 'gru':
+            self.rnn = GRULayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn)  
+        else:
+            self.rnn = RNNLayer(input_dim=input_dim, hidden_dim=hidden_dim, activation_function=act_function_rnn, init_function=init_function_rnn, random_scale=random_scale_rnn)
         self.dense = DenseLayer(extras= [batch_norm, dropout], num_inputs=hidden_dim, num_neurons=output_dim, activation_function=activation_function, init_function=init_function, random_scale=random_scale)
         self.many_to_one = many_to_one
         self.optimizer = SGD(learning_rate=learning_rate)
@@ -1494,9 +1498,7 @@ class RecurrentModel:
 
     def update(self, wd):
         # SGD update
-        self.rnn.weights_xh -= self.learning_rate * (self.rnn.d_Wxh + wd * self.rnn.weights_xh)
-        self.rnn.weights_hh -= self.learning_rate * (self.rnn.d_Whh + wd * self.rnn.weights_hh)
-        self.rnn.biases_h  -= self.learning_rate * self.rnn.d_bh
+        self.rnn.update(learning_rate=self.learning_rate, wd=wd)
         self.optimizer.update(layer=self.dense)
 
     def fit(self, X_train, y_train, epochs, batch_size=16, wd = 1e-4, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
