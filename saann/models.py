@@ -2,8 +2,6 @@
 # Copyright (c) 2026 Alessio Branda
 # Licensed under the MIT License
 
-
-#import numpy as np
 import datetime
 import pickle
 from . import losses
@@ -16,8 +14,8 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.2.1"
-LIST_VERSIONS_COMPATIBLE = ["0.2.0", VERSION]
+VERSION = "0.2.3"
+LIST_VERSIONS_COMPATIBLE = [VERSION]
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -99,17 +97,25 @@ def save_model_all(model, model_file_name = "model.pickle", weights_only = False
     except ImportError as e:
         raise ValueError("Couldn't save model:", e)
 
-def load_CNN_model(path):
+def load_CNN_model(path, flag_gpu):
     try:
-        model = CNN()
+        model = CNN(gpu=flag_gpu)
         model.load_model(path)
         return model
     except ImportError as e:
         raise ValueError("Couldn't load CNN model:", e)
 
-def load_Sequential_model(path):
+def load_Sequential_model(path, flag_gpu):
     try:
-        model = SequentialModel()
+        model = SequentialModel(gpu=flag_gpu)
+        model.load_model(path)
+        return model
+    except ImportError as e:
+        raise ValueError("Couldn't load Sequential model:", e)
+    
+def load_Recurrent_model(path, flag_gpu):
+    try:
+        model = RecurrentModel(gpu=flag_gpu)
         model.load_model(path)
         return model
     except ImportError as e:
@@ -119,10 +125,18 @@ def load_model(path):
     try:
         with open(path, "rb") as f:
             model = pickle.load(f)
+            version = model["version"]
+
+            if version not in LIST_VERSIONS_COMPATIBLE:
+                raise ValueError(f"Loaded model is of a version '{version}' - it is not compatible with current version {VERSION}. List of compatible versions {LIST_VERSIONS_COMPATIBLE}.")
+            flag_gpu = model["gpu"]
+            
             if model["model"] == "CNN":
-                model_import = load_CNN_model(path)
+                model_import = load_CNN_model(path, flag_gpu)
             elif model["model"] == "SequentialModel":
-                model_import = load_Sequential_model(path)
+                model_import = load_Sequential_model(path, flag_gpu)
+            elif model["model"] == "RecurrentModel":
+                model_import = load_Recurrent_model(path, flag_gpu)
             else:
                 raise KeyError(f"Couldn't recognize model '{model['model']}'.")
             return model_import
@@ -176,10 +190,15 @@ class SequentialModel:
         if gpu:
             if BE.gpu_available:
                 print("Computing on GPU")
+                self.flag_gpu = True
             else:
                 print("GPU not available. Computing on CPU")
+                self.processing_unit = "cpu"
+                self.flag_gpu = False
         else:
             print("Computing on CPU")
+            self.processing_unit = "cpu"
+            self.flag_gpu = False
             BE.use_cpu()
 
     def construct(self, layers_info, learning_rate = 0.01, batch_norm = False, dropout = False):
@@ -488,11 +507,11 @@ class SequentialModel:
     
     def save_model(self, path = "model.pickle"):
         self.batch_size = getattr(self, "batch_size", 16)
-        self.num_channels = getattr(self, "num_channels", 3)
         try:
             weights = self.save_weights(path=None)
             model_architecture = {
                 "version" : VERSION,
+                "gpu": self.flag_gpu,
                 "model" : "SequentialModel",
                 "weights" : weights,
                 "layers_info" : self.layers_info,
@@ -508,15 +527,15 @@ class SequentialModel:
         try:
             with open(path, "rb") as f:
                 model = pickle.load(f)
-                version = model["version"]
                 weights = model["weights"]
                 layers_info = model["layers_info"]
                 batch_size = model["batch_size"]
-            
-            if version not in LIST_VERSIONS_COMPATIBLE:
-                raise ValueError(f"Loaded model is of a version '{version}' - it is not compatible with current version {VERSION}. List of compatible versions {LIST_VERSIONS_COMPATIBLE}.")
+                flag_gpu = model["gpu"]
             
             self.batch_size = batch_size
+            
+            if self.flag_gpu != flag_gpu and self.flag_gpu == False:
+                raise ValueError("Model loaded was trained on GPU, but the GPU is currently not available. In future version it'll be compatible!")
 
             self.construct(layers_info=layers_info)
             self.load_weights(weights=weights)
@@ -655,10 +674,15 @@ class CNN:
         if gpu:
             if BE.gpu_available:
                 print("Computing on GPU")
+                self.flag_gpu = True
             else:
                 print("GPU not available. Computing on CPU")
+                self.processing_unit = "cpu"
+                self.flag_gpu = False
         else:
             print("Computing on CPU")
+            self.processing_unit = "cpu"
+            self.flag_gpu = False
             BE.use_cpu()
 
         for p in range(len(params_int)):
@@ -1374,6 +1398,7 @@ class CNN:
             weights = self.save_weights(path=None)
             model_architecture = {
                 "version" : VERSION,
+                "gpu": self.flag_gpu,
                 "model" : "CNN",
                 "weights" : weights,
                 "layers_info" : self.layers_info,
@@ -1396,7 +1421,6 @@ class CNN:
         try:
             with open(path, "rb") as f:
                 model = pickle.load(f)
-                version = model["version"]
                 weights = model["weights"]
                 layers_info = model["layers_info"]
                 batch_size = model["batch_size"]
@@ -1407,9 +1431,7 @@ class CNN:
                 init_function = model["init_function"]
                 num_filters = model["num_filters"]
                 num_channels = model["num_channels"]
-            
-            if version not in LIST_VERSIONS_COMPATIBLE:
-                raise ValueError(f"Loaded model is of a version '{version}' - it is not compatible with current version {VERSION}. List of compatible versions {LIST_VERSIONS_COMPATIBLE}.")
+                flag_gpu = model["gpu"]
 
             self.conv1a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = num_channels, activation_function = activation_function, init_function = init_function, pool_size = 2)
             self.conv2a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
@@ -1420,6 +1442,9 @@ class CNN:
             self.conv3b = self.ConvolutionLayer(filter_size = filter_size, num_filters = 4*num_filters, padding = padding, stride = stride, num_channels = 4*num_filters, activation_function = activation_function, init_function = init_function, pool_size = 2)
 
             self.batch_size = batch_size
+
+            if self.flag_gpu != flag_gpu and self.flag_gpu == False:
+                raise ValueError("Model loaded was trained on GPU, but the GPU is currently not available. In future version it'll be compatible!")
 
             self.construct(layers_info=layers_info)
             self.load_weights_internal(weights=weights)
@@ -1432,17 +1457,20 @@ class RecurrentModel:
         self.layers = []
         self.learning_rate = None
         self.optimizer = None
-        self.rnn_type = rnn_type
+        self.rnn_type = rnn_type.lower()
         
         if gpu:
             if BE.gpu_available:
                 print("Computing on GPU")
-                BE.use_gpu()
+                self.flag_gpu = True
             else:
                 print("GPU not available. Computing on CPU")
-                BE.use_cpu()
+                self.processing_unit = "cpu"
+                self.flag_gpu = False
         else:
             print("Computing on CPU")
+            self.processing_unit = "cpu"
+            self.flag_gpu = False
             BE.use_cpu()
 
     def construct(self, input_dim, hidden_dim, output_dim, activation_function, init_function = "he", learning_rate=0.001, random_scale = 0.01, act_function_rnn='tanh', init_function_rnn='xavier', random_scale_rnn=0.01, many_to_one=True, batch_norm = False, dropout = False):
@@ -1453,7 +1481,8 @@ class RecurrentModel:
         :params input_dim: *int* - Input dimensions
         :params hidden_dim: *int* - Hidden dimensions
         :params output_dim: *int* - Output dimensions
-        :params activation_function: *str* - Activation function for the Dense layer ()
+        :param activation_function: *str* - Activation function for the Dense layer
+        :param init_function: *str* - Initiation function for the Dense layer
         Example
         -------
             >>> text = "hellohellohellohellohello"
@@ -1468,6 +1497,7 @@ class RecurrentModel:
                 many_to_one=True
             )
         """
+        self.construction = [input_dim, hidden_dim, output_dim, activation_function, init_function, learning_rate, random_scale, act_function_rnn, init_function_rnn, random_scale_rnn, many_to_one, batch_norm, dropout]
         self.learning_rate = learning_rate
         if self.rnn_type == 'gru':
             self.rnn = GRULayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn)  
@@ -1679,3 +1709,111 @@ class RecurrentModel:
         """
         y_pred, cache = self.forward(X_test)
         return y_pred
+    
+    def save_weights(self, path):
+        if self.rnn_type == "gru":
+            weights = {
+                "dense":
+                    {
+                        "W": self.dense.weights,
+                        "b": self.dense.biases,
+                    },
+                "rnn":
+                    {
+                        "Wz": self.rnn.weights_W_z,
+                        "Uz": self.rnn.weights_U_z,
+                        "bz": self.rnn.biases_z,
+                        "Wr": self.rnn.weights_W_r,
+                        "Ur": self.rnn.weights_U_r,
+                        "br": self.rnn.biases_r,
+                        "Wh": self.rnn.weights_W_h,
+                        "Uh": self.rnn.weights_U_h,
+                        "bh": self.rnn.biases_h
+                    }
+            }
+        else:
+            weights = {
+                "dense":
+                    {
+                        "W": self.dense.weights,
+                        "b": self.dense.biases,
+                    },
+                "rnn":
+                    {
+                        "Wx": self.rnn.weights_xh,
+                        "Wh": self.rnn.weights_hh,
+                        "bh": self.rnn.biases_h
+                    }
+            }
+
+        if path == None:
+            return weights
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(weights, f)
+    
+    def load_weights(self, weights):
+        # Load Dense layer
+        self.dense.weights = weights['dense']['W']
+        self.dense.biases = weights['dense']['b']
+
+        # Load RNN layer
+        if self.rnn_type == "gru":
+            # Update
+            self.rnn.weights_W_z = weights['rnn']['Wz']
+            self.rnn.weights_U_z = weights['rnn']['Uz']
+            self.rnn.biases_z = weights['rnn']['bz']
+            # Reset
+            self.rnn.weights_W_r = weights['rnn']['Wr']
+            self.rnn.weights_U_r = weights['rnn']['Ur']
+            self.rnn.biases_r = weights['rnn']['br']
+            # Hidden state
+            self.rnn.weights_W_h = weights['rnn']['Wh']
+            self.rnn.weights_U_h = weights['rnn']['Uh']
+            self.rnn.biases_h = weights['rnn']['bh']
+        else:
+            self.rnn.weights_xh = weights['rnn']['Wx']
+            self.rnn.weights_hh = weights['rnn']['Wh']
+            self.rnn.biases_h = weights['rnn']['bh']
+
+    
+    def save_model(self, path = "RNN_model.pickle"):
+        self.batch_size = getattr(self, "batch_size", 16)
+        try:
+            weights = self.save_weights(path=None)
+            model_architecture = {
+                "version" : VERSION,
+                "gpu": self.flag_gpu,
+                "model" : "RecurrentModel",
+                "type" : self.rnn_type,
+                "weights" : weights,
+                "batch_size" : self.batch_size,
+                "construction": self.construction
+            }
+            with open(path, "wb") as f:
+                pickle.dump(model_architecture, f)
+            print(f"Model saved: {path}")
+        except ImportError as e:
+            raise ValueError(f"{e}")
+    
+    def load_model(self, path):
+        try:
+            with open(path, "rb") as f:
+                model = pickle.load(f)
+                type_model = model["type"]
+                weights = model["weights"]
+                batch_size = model["batch_size"]
+                construction = model["construction"]
+                flag_gpu = model["gpu"]
+            
+            self.batch_size = batch_size
+            self.rnn_type = type_model
+            
+            if self.flag_gpu != flag_gpu and self.flag_gpu == False:
+                raise ValueError("Model loaded was trained on GPU, but the GPU is currently not available. In future version it'll be compatible!")
+
+            self.construct(*construction)
+            self.load_weights(weights=weights)
+            print("Recurrent model loaded")
+        except ImportError as e:
+            raise ValueError(e)
