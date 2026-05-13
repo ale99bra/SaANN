@@ -7,6 +7,12 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
+def clip(grad, clip_value=1.0):
+    norm = BE.xp.linalg.norm(grad)
+    if norm > clip_value:
+        grad *= clip_value / norm
+    return grad
+
 # Dense Layer class
 class DenseLayer:
     """
@@ -98,7 +104,7 @@ class DenseLayer:
 
         return self.output
     
-    def backward(self, d_loss_wrt_output, wd):
+    def backward(self, d_loss_wrt_output):
         """
         Calculating the backpropagation.\n
         Parameters
@@ -118,11 +124,6 @@ class DenseLayer:
 
         self.d_weights = BE.xp.dot(self.inputs.T, d_activation_output) / batch_size # gradient of loss w.r.t. weights
         self.d_biases = BE.xp.sum(d_activation_output, axis=0, keepdims=True) / batch_size # gradient of loss w.r.t. biases
-
-        self.d_weights += 2 * wd * self.weights
-
-        """self.d_weights = BE.xp.clip(self.d_weights, -1, 1)
-        self.d_biases = BE.xp.clip(self.d_biases, -1, 1)"""
 
         d_loss_wrt_prev_output = BE.xp.dot(d_activation_output, self.weights.T)
 
@@ -274,7 +275,7 @@ class MLP:
             curr_input = layer.forward(curr_input) #update the input
         return curr_input
     
-    def backward(self, d_loss_wrt_pred, wd):
+    def backward(self, d_loss_wrt_pred):
         """
         Performs the backpropagation.\n
         Parameters
@@ -283,7 +284,7 @@ class MLP:
         """
         curr_d_loss = d_loss_wrt_pred
         for layer in reversed(self.layers):
-            curr_d_loss = layer.backward(curr_d_loss, wd)
+            curr_d_loss = layer.backward(curr_d_loss)
 
         return curr_d_loss
     
@@ -404,6 +405,11 @@ class RNNLayer:
         return d_X
     
     def update(self, learning_rate, wd=1e-5):
+
+        self.d_Wxh = clip(self.d_Wxh)
+        self.d_Whh = clip(self.d_Whh)
+        self.d_bh = clip(self.d_bh)
+
         self.weights_xh -= learning_rate * (self.d_Wxh + wd * self.weights_xh)
         self.weights_hh -= learning_rate * (self.d_Whh + wd * self.weights_hh)
         self.biases_h  -= learning_rate * self.d_bh
@@ -588,6 +594,19 @@ class GRULayer:
         return d_X
     
     def update(self, learning_rate, wd = 1e-5):
+
+        self.d_Wz = clip(self.d_Wz)
+        self.d_Uz = clip(self.d_Uz)
+        self.d_bz = clip(self.d_bz)
+
+        self.d_Wr = clip(self.d_Wr)
+        self.d_Ur = clip(self.d_Ur)
+        self.d_br = clip(self.d_br)
+
+        self.d_Wh = clip(self.d_Wh)
+        self.d_Uh = clip(self.d_Uh)
+        self.d_bh = clip(self.d_bh)
+
         for W, d_W in [
             (self.weights_W_z, self.d_Wz),
             (self.weights_U_z, self.d_Uz),
@@ -601,3 +620,228 @@ class GRULayer:
         self.biases_z -= learning_rate * self.d_bz
         self.biases_r -= learning_rate * self.d_br
         self.biases_h -= learning_rate * self.d_bh
+
+class LSTMLayer:
+
+    def __init__(self, input_dim, hidden_dim, init_function="xavier"):
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+        # Initialization selection
+        if init_function == "random":
+            warnings.warn("Random init is unstable for LSTM. Xavier recommended.", UserWarning)
+            self.init_W = In.random_scaled_init
+        elif init_function in ("xavier", "glorot"):
+            self.init_W = In.xavier_init
+        elif init_function in ("he", "kaiming"):
+            warnings.warn("He init tends to explode in LSTM. Xavier recommended.", UserWarning)
+            self.init_W = In.he_init
+        else:
+            raise ValueError("Unknown init function.")
+
+        # Forget gate
+        self.weights_W_f = self.init_W(input_dim, hidden_dim)
+        self.weights_U_f = self.init_W(hidden_dim, hidden_dim)
+        self.biases_f = BE.xp.zeros((1, hidden_dim))
+
+        # Input gate
+        self.weights_W_i = self.init_W(input_dim, hidden_dim)
+        self.weights_U_i = self.init_W(hidden_dim, hidden_dim)
+        self.biases_i = BE.xp.zeros((1, hidden_dim))
+
+        # Candidate cell
+        self.weights_W_c = self.init_W(input_dim, hidden_dim)
+        self.weights_U_c = self.init_W(hidden_dim, hidden_dim)
+        self.biases_c = BE.xp.zeros((1, hidden_dim))
+
+        # Output gate
+        self.weights_W_o = self.init_W(input_dim, hidden_dim)
+        self.weights_U_o = self.init_W(hidden_dim, hidden_dim)
+        self.biases_o = BE.xp.zeros((1, hidden_dim))
+
+    def forward(self, X, h0=None, c0=None):
+        batch, seq_len, _ = X.shape
+
+        if h0 is None:
+            h_t = BE.xp.zeros((batch, self.hidden_dim))
+        else:
+            h_t = h0
+
+        if c0 is None:
+            c_t = BE.xp.zeros((batch, self.hidden_dim))
+        else:
+            c_t = c0
+
+        H = BE.xp.zeros((batch, seq_len, self.hidden_dim))
+
+        f_list, i_list, o_list = [], [], []
+        c_tilde_list, c_list, h_list = [], [], []
+
+        for t in range(seq_len):
+            x_t = X[:, t, :]
+
+            f_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_f) + BE.xp.dot(h_t, self.weights_U_f) + self.biases_f)
+            i_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_i) + BE.xp.dot(h_t, self.weights_U_i) + self.biases_i)
+            o_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_o) + BE.xp.dot(h_t, self.weights_U_o) + self.biases_o)
+
+            c_tilde = AF.tanh(BE.xp.dot(x_t, self.weights_W_c) + BE.xp.dot(h_t, self.weights_U_c) + self.biases_c)
+
+            c_t = f_t * c_t + i_t * c_tilde
+            h_t = o_t * AF.tanh(c_t)
+
+            H[:, t, :] = h_t
+
+            f_list.append(f_t)
+            i_list.append(i_t)
+            o_list.append(o_t)
+            c_tilde_list.append(c_tilde)
+            c_list.append(c_t)
+            h_list.append(h_t)
+
+        cache = {
+            "X": X,
+            "f": f_list,
+            "i": i_list,
+            "o": o_list,
+            "c_tilde": c_tilde_list,
+            "c": c_list,
+            "h": h_list,
+            "h0": h0 if h0 is not None else BE.xp.zeros_like(h_list[0]),
+            "c0": c0 if c0 is not None else BE.xp.zeros_like(c_list[0]),
+        }
+
+        return H, cache
+
+    def backward(self, dH, cache):
+        X = cache["X"]
+        batch, seq_len, _ = X.shape
+
+        f_list = cache["f"]
+        i_list = cache["i"]
+        o_list = cache["o"]
+        c_tilde_list = cache["c_tilde"]
+        c_list = cache["c"]
+        h_list = cache["h"]
+        h0 = cache["h0"]
+        c0 = cache["c0"]
+
+        # Init grads
+        self.d_W_f = BE.xp.zeros_like(self.weights_W_f)
+        self.d_U_f = BE.xp.zeros_like(self.weights_U_f)
+        self.d_b_f = BE.xp.zeros_like(self.biases_f)
+
+        self.d_W_i = BE.xp.zeros_like(self.weights_W_i)
+        self.d_U_i = BE.xp.zeros_like(self.weights_U_i)
+        self.d_b_i = BE.xp.zeros_like(self.biases_i)
+
+        self.d_W_c = BE.xp.zeros_like(self.weights_W_c)
+        self.d_U_c = BE.xp.zeros_like(self.weights_U_c)
+        self.d_b_c = BE.xp.zeros_like(self.biases_c)
+
+        self.d_W_o = BE.xp.zeros_like(self.weights_W_o)
+        self.d_U_o = BE.xp.zeros_like(self.weights_U_o)
+        self.d_b_o = BE.xp.zeros_like(self.biases_o)
+
+        dX = BE.xp.zeros_like(X)
+        dh_next = BE.xp.zeros((batch, self.hidden_dim))
+        dc_next = BE.xp.zeros((batch, self.hidden_dim))
+
+        for t in reversed(range(seq_len)):
+            x_t = X[:, t, :]
+            h_t = h_list[t]
+            c_t = c_list[t]
+            h_prev = h_list[t-1] if t > 0 else h0
+            c_prev = c_list[t-1] if t > 0 else c0
+
+            f_t = f_list[t]
+            i_t = i_list[t]
+            o_t = o_list[t]
+            c_tilde = c_tilde_list[t]
+
+            dh = dH[:, t, :] + dh_next
+
+            do = dh * AF.tanh(c_t)
+            do_raw = AF.sigmoid_der(o_t) * do
+
+            dc = dh * o_t * (1 - AF.tanh(c_t)**2) + dc_next
+
+            df = dc * c_prev
+            df_raw = AF.sigmoid_der(f_t) * df
+
+            di = dc * c_tilde
+            di_raw = AF.sigmoid_der(i_t) * di
+
+            dc_tilde = dc * i_t
+            dc_tilde_raw = AF.tanh_der(c_tilde) * dc_tilde
+
+            # Parameter gradients
+            self.d_W_f += BE.xp.dot(x_t.T, df_raw)
+            self.d_U_f += BE.xp.dot(h_prev.T, df_raw)
+            self.d_b_f += BE.xp.sum(df_raw, axis=0, keepdims=True)
+
+            self.d_W_i += BE.xp.dot(x_t.T, di_raw)
+            self.d_U_i += BE.xp.dot(h_prev.T, di_raw)
+            self.d_b_i += BE.xp.sum(di_raw, axis=0, keepdims=True)
+
+            self.d_W_c += BE.xp.dot(x_t.T, dc_tilde_raw)
+            self.d_U_c += BE.xp.dot(h_prev.T, dc_tilde_raw)
+            self.d_b_c += BE.xp.sum(dc_tilde_raw, axis=0, keepdims=True)
+
+            self.d_W_o += BE.xp.dot(x_t.T, do_raw)
+            self.d_U_o += BE.xp.dot(h_prev.T, do_raw)
+            self.d_b_o += BE.xp.sum(do_raw, axis=0, keepdims=True)
+
+            # Gradients wrt input
+            dX[:, t, :] = (
+                BE.xp.dot(df_raw, self.weights_W_f.T) +
+                BE.xp.dot(di_raw, self.weights_W_i.T) +
+                BE.xp.dot(dc_tilde_raw, self.weights_W_c.T) +
+                BE.xp.dot(do_raw, self.weights_W_o.T)
+            )
+
+            # Gradients wrt h_prev
+            dh_prev = (
+                BE.xp.dot(df_raw, self.weights_U_f.T) +
+                BE.xp.dot(di_raw, self.weights_U_i.T) +
+                BE.xp.dot(dc_tilde_raw, self.weights_U_c.T) +
+                BE.xp.dot(do_raw, self.weights_U_o.T)
+            )
+
+            # Gradients wrt c_prev
+            dc_prev = dc * f_t
+
+            dh_next = dh_prev
+            dc_next = dc_prev
+
+        return dX
+    
+    def update(self, learning_rate, wd=1e-5):
+        
+        self.d_W_f = clip(self.d_W_f)
+        self.d_U_f = clip(self.d_U_f)
+        self.d_b_f = clip(self.d_b_f)
+
+        self.d_W_i = clip(self.d_W_i)
+        self.d_U_i = clip(self.d_U_i)
+        self.d_b_i = clip(self.d_b_i)
+
+        self.d_W_c = clip(self.d_W_c)
+        self.d_U_c = clip(self.d_U_c)
+        self.d_b_c = clip(self.d_b_c)
+
+        self.d_W_o = clip(self.d_W_o)
+        self.d_U_o = clip(self.d_U_o)
+        self.d_b_o = clip(self.d_b_o)
+
+        for W, dW in [
+            (self.weights_W_f, self.d_W_f), (self.weights_U_f, self.d_U_f),
+            (self.weights_W_i, self.d_W_i), (self.weights_U_i, self.d_U_i),
+            (self.weights_W_c, self.d_W_c), (self.weights_U_c, self.d_U_c),
+            (self.weights_W_o, self.d_W_o), (self.weights_U_o, self.d_U_o),
+        ]:
+            W -= learning_rate * (dW + wd * W)
+
+        self.biases_f -= learning_rate * self.d_b_f
+        self.biases_i -= learning_rate * self.d_b_i
+        self.biases_c -= learning_rate * self.d_b_c
+        self.biases_o -= learning_rate * self.d_b_o

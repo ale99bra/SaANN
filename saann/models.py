@@ -6,7 +6,7 @@ import datetime
 import pickle
 from . import losses
 from .gradients import SGD
-from .layers import MLP, DenseLayer, RNNLayer, GRULayer
+from .layers import MLP, DenseLayer, RNNLayer, GRULayer, LSTMLayer
 from .processing import Scaling, train_test_split
 import warnings
 import matplotlib.pyplot as plt
@@ -14,8 +14,8 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.2.3"
-LIST_VERSIONS_COMPATIBLE = [VERSION]
+VERSION = "0.2.4"
+LIST_VERSIONS_COMPATIBLE = ["0.2.3", VERSION]
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -323,10 +323,10 @@ class SequentialModel:
                 except:
                     d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
 
-                self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred, wd=wd)
+                self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred)
     
                 for layer in self.mlp.layers:
-                    self.optimizer.update(layer)
+                    self.optimizer.update(layer, wd=wd)
                 
             # Average loss over all batches for reporting
             avg_loss = tot_loss / num_batches
@@ -1062,14 +1062,14 @@ class CNN:
                 except:
                     d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
 
-                d_mlp = self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred, wd=wd)
+                d_mlp = self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred)
 
                 d_conv_input = d_mlp.reshape(conv_out.shape[0], *conv_out.shape[1:])
 
                 self.ConvolutionBackward(d=d_conv_input)
 
                 for layer in self.mlp.layers:
-                    self.optimizer.update(layer)                
+                    self.optimizer.update(layer, wd=wd)                
                 
             # Average loss over all batches for reporting
             avg_loss = tot_loss / num_batches
@@ -1453,7 +1453,7 @@ class CNN:
             raise ValueError(e)
 
 class RecurrentModel:
-    def __init__(self, rnn_type = 'gru', gpu=False):
+    def __init__(self, rnn_type = 'vanilla', gpu=False):
         self.layers = []
         self.learning_rate = None
         self.optimizer = None
@@ -1501,6 +1501,8 @@ class RecurrentModel:
         self.learning_rate = learning_rate
         if self.rnn_type == 'gru':
             self.rnn = GRULayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn)  
+        elif self.rnn_type == "lstm":
+            self.rnn = LSTMLayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn)
         else:
             self.rnn = RNNLayer(input_dim=input_dim, hidden_dim=hidden_dim, activation_function=act_function_rnn, init_function=init_function_rnn, random_scale=random_scale_rnn)
         self.dense = DenseLayer(extras= [batch_norm, dropout], num_inputs=hidden_dim, num_neurons=output_dim, activation_function=activation_function, init_function=init_function, random_scale=random_scale)
@@ -1515,21 +1517,21 @@ class RecurrentModel:
             out = self.dense.forward(H.reshape(-1, H.shape[-1]))
         return out, cache
 
-    def backward(self, dOut, cache, wd = 1e-5):
-        d_H = self.dense.backward(dOut, wd=wd)
+    def backward(self, dOut, cache):
+        d_h_last = self.dense.backward(dOut)
         if self.many_to_one:
-            d_H_full = BE.xp.zeros((d_H.shape[0], cache["X"].shape[1], d_H.shape[1]))
-            d_H_full[:, -1, :] = d_H
+            d_H_full = BE.xp.zeros((cache["X"].shape[0], cache["X"].shape[1], self.rnn.hidden_dim))
+            d_H_full[:, -1, :] = d_h_last
             d_X = self.rnn.backward(d_H_full, cache)
         else:
-            d_H_seq = d_H.reshape(cache["X"].shape[0], cache["X"].shape[1], -1)
+            d_H_seq = d_h_last.reshape(cache["X"].shape[0], cache["X"].shape[1], -1)
             d_X = self.rnn.backward(d_H_seq, cache)
         return d_X
 
     def update(self, wd):
         # SGD update
         self.rnn.update(learning_rate=self.learning_rate, wd=wd)
-        self.optimizer.update(layer=self.dense)
+        self.optimizer.update(layer=self.dense, wd=wd, clipping = True)
 
     def fit(self, X_train, y_train, epochs, batch_size=16, wd = 1e-4, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
         """
@@ -1640,7 +1642,7 @@ class RecurrentModel:
                 except:
                     d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
 
-                self.backward(dOut = d_loss_wrt_pred, cache=cache, wd = wd)
+                self.backward(dOut = d_loss_wrt_pred, cache=cache)
     
                 self.update(wd = wd)
                 
@@ -1731,6 +1733,29 @@ class RecurrentModel:
                         "bh": self.rnn.biases_h
                     }
             }
+        elif self.rnn_type == "lstm":
+            weights = {
+                "dense":
+                    {
+                        "W": self.dense.weights,
+                        "b": self.dense.biases,
+                    },
+                "rnn":
+                    {
+                        "Wf": self.rnn.weights_W_f,
+                        "Uf": self.rnn.weights_U_f,
+                        "bf": self.rnn.biases_f,
+                        "Wi": self.rnn.weights_W_i,
+                        "Ui": self.rnn.weights_U_i,
+                        "bi": self.rnn.biases_i,
+                        "Wc": self.rnn.weights_W_c,
+                        "Uc": self.rnn.weights_U_c,
+                        "bc": self.rnn.biases_c,
+                        "Wo": self.rnn.weights_W_o,
+                        "Uo": self.rnn.weights_U_o,
+                        "bo": self.rnn.biases_o
+                    }
+            }
         else:
             weights = {
                 "dense":
@@ -1771,6 +1796,23 @@ class RecurrentModel:
             self.rnn.weights_W_h = weights['rnn']['Wh']
             self.rnn.weights_U_h = weights['rnn']['Uh']
             self.rnn.biases_h = weights['rnn']['bh']
+        elif self.rnn_type == "lstm":
+            # Forget
+            self.rnn.weights_W_f = weights['rnn']['Wf']
+            self.rnn.weights_U_f = weights['rnn']['Uf']
+            self.rnn.biases_f = weights['rnn']['bf']
+            # Input
+            self.rnn.weights_W_i = weights['rnn']['Wi']
+            self.rnn.weights_U_i = weights['rnn']['Ui']
+            self.rnn.biases_i = weights['rnn']['bi']
+            # Candidate
+            self.rnn.weights_W_c = weights['rnn']['Wc']
+            self.rnn.weights_U_c = weights['rnn']['Uc']
+            self.rnn.biases_c = weights['rnn']['bc']
+            # Output
+            self.rnn.weights_W_o = weights['rnn']['Wo']
+            self.rnn.weights_U_o = weights['rnn']['Uo']
+            self.rnn.biases_o = weights['rnn']['bo']
         else:
             self.rnn.weights_xh = weights['rnn']['Wx']
             self.rnn.weights_hh = weights['rnn']['Wh']
