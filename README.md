@@ -300,7 +300,7 @@ SaANN/
     ├── diabetes_dataset_example.ipynb              # Example of manual workflow
     ├── XOR_example.ipynb                           # Example of manual workflow
     ├── flower_cnn_example.ipynb                    # CNN training and evaluation - flowers
-    └── EO_cnn_example.ipynb                    # CNN training and evaluation - satellite images
+    └── EO_cnn_example.ipynb                        # CNN training and evaluation - satellite images
 │
 └── .github/workflows                               
     └── tests.yml                                   # GitHub Actions test workflow
