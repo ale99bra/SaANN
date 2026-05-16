@@ -61,7 +61,7 @@ class TestLayer(unittest.TestCase):
         
         # Backward pass should not raise error
         try:
-            dL_dX = layer.backward(dL_dA, wd=0.01)
+            dL_dX = layer.backward(dL_dA)
             self.assertEqual(dL_dX.shape, X.shape)
         except Exception as e:
             self.fail(f"backward() raised {type(e).__name__} unexpectedly: {e}")
