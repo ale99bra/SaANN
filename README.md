@@ -4,7 +4,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN provides transparent implementations of MLPs and CNNs, with optional GPU acceleration and comprehensive metrics for learning and experimentation.
+An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN provides transparent implementations of MLPs, CNNs and RNNs, with optional GPU acceleration and comprehensive metrics for learning and experimentation.
 
 **⚠️ Important**: SaANN is designed for personal learning, not production. This project was created as an exercise to deepen my understanding of neural networks. While others are welcome to explore or use it, its primary purpose is educational for myself.
 
@@ -36,6 +36,17 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 - MLP classifier head
 - Full GPU acceleration support
 - Integrated metrics reporting
+
+### 🧠 Recurrent Neural Networks (RNN, GRU, LSTM) — Sequence Modeling
+
+- Pure NumPy/CuPy implementation
+- Vanilla RNN, GRU, and LSTM cells
+- Many‑to‑one and many‑to‑many modes
+- Customizable hidden dimension, activation, and initialization
+- Full backpropagation through time (BPTT)
+- Gradient clipping for stability
+- Compatible with GPU acceleration
+- Dense head for regression or classification
 
 ### 💾 Model Management
 
@@ -188,6 +199,55 @@ MCC: ~0.04
 
 These results are expected for a small dataset, 20 epochs, and an educational CNN.
 
+### RNN Example
+
+```python
+from saann.models import RecurrentModel
+from saann.metrics import Metrics
+import numpy as np
+
+text = "The quick brown fox jumps over the lazy dog"
+
+text = text * 1000
+
+X, y, c2i, i2c, vocab = generate_text_dataset(text, seq_len=43) #create dataset (external function that generate one-hot targets)
+
+model = RecurrentModel(rnn_type='lstm', gpu=False) # rnn_type can be 'lstm', 'gru' or None for vanilla RNN
+model.construct(
+    input_dim=vocab,
+    hidden_dim=128,
+    output_dim=vocab,
+    learning_rate=3e-3,
+    activation_function="softmax",
+    act_function_rnn="tanh",
+    many_to_one=False
+)
+
+model.fit(X, y, epochs=200, batch_size=32, loss_function="cross-entropy", graphical=True)
+
+test_text = "The quick brown fox jumps over the lazy dog"
+
+X, y, c2i, i2c, vocab = generate_text_dataset(test_text, seq_len=1)
+
+y_pred = model.predict(X)
+
+ce = cross_entropy(y_true=y, y_pred=y_pred)
+print("CE prediction:", ce)
+
+print(f"Text = {test_text}, seq_len = 4, c2i = {c2i}, i2c: {i2c}")
+print("y:",y)
+print("y_pred:",y_pred)
+
+i = 0
+for yi in y:
+    print(f"Real: {np.argmax(yi)}, Pred: {np.argmax(y_pred[i])}")
+    i += 1
+
+metrics = Metrics(y_test=y, y_pred=y_pred)
+metrics.report()
+
+```
+
 ### Model Saving & Loading
 
 #### Save a trained model
@@ -292,7 +352,7 @@ Trains the model on data.
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
 - `wd` (float): Weight decay factor for regularization
-- `loss_function` (str): 'MSE', 'MAE', or 'Huber' (or 'Huber:delta' for custom delta)
+- `loss_function` (str): 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' for custom delta)
 - `graphical` (bool): Display training plot
 - `real_time` (bool): Update training plot in real-time
 - `log_plot` (bool): Display plot in semilogy scale
@@ -316,7 +376,7 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - `epochs` (int): Number of training epochs
 - `batch_size` (int): Batch size for training
 - `wd` (float): Weight decay factor for regularization
-- `loss_function` (str): 'MSE', 'MAE', or 'Huber'
+- `loss_function` (str): 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' for custom delta)
 - `split_test_percentage` (float): Test/Train split ratio (0.0-1.0)
 - `scaling` (str): Scaling method ('zscore', 'minmax', 'log', 'mean', or None)
 - `graphical` (bool): Display training plot
@@ -325,6 +385,11 @@ Runs the complete pipeline: data splitting, scaling, training, and evaluation.
 - `test_loss` (bool): Print loss metrics
 - `scatter_comparison` (bool): Display scatter plot of test vs. predicted
 - Returns: Tuple of (predictions, train_predictions, X_train, X_test, y_train, y_test)
+
+**`save_model(path)`**
+
+Save the model's architecture and weights in a pickle file
+- `path` (str): File path for output
 
 ### CNN (Convolutional Neural Network)
 
@@ -384,6 +449,65 @@ Train the CNN on data.
 Make predictions on new images.
 
 - `X` (array): Input images
+- Returns: Predictions (array)
+
+**`save_model(path)`**
+
+Save the model's architecture and weights in a pickle file
+- `path` (str): File path for output
+
+### RecurrentModel (RNN)
+
+Main class for building and training a Recurrent model.
+
+#### Methods
+
+**`__init__(rnn_type, gpu)`**
+
+Initialize a `RecurrentModel`.
+
+- `rnn_type` (str): Changes architecture of the RNN layer: 'lstm', 'gru' or None (for vanilla)
+- `gpu` (bool): Enable GPU acceleration (requires CuPy) - If GPU is not available, SaANN automatically switches to CPU
+
+`RecurrentModel` expects the input features (`X`) to be of shape `(batch, seq_len, features)` and input targets (`y`) to be of shape `(batch, 1)` if regression, or a one-hot encoded array of shape `(batch, classes)` if classification.
+
+**`construct(input_dim, hidden_dim, output_dim, activation_function, init_function, learning_rate, random_scale, act_function_rnn, init_function_rnn, random_scale_rnn, many_to_one, dropout)`**
+
+Contruct the RNN and the Dense layers of the model
+
+- `input_dim` (int): Input dimensions
+- `hidden_dim` (int): Hidden dimensions
+- `output_dim` (int): Output dimensions
+- `activation_function` (str): Activation function for the Dense layer
+- `init_function` (str): Initiation function for the Dense layer
+- `learning_rate` (float): Hyperparameter - Learning rate for optimization
+- `random_scale` (float): Scale for the 'random' initiation method (dense layer)
+- `act_function_rnn` (str): Activation function for the RNN layer
+- `init_function_rnn` (str): Initiation function for the RNN layer
+- `random_scale_rnn` (float): Scale for the 'random' initiation method (RNN layer)
+- `many_to_one` (bool): Enables the many-to-one or the many-to-many if False
+- `dropout` (bool): Enables dropout
+
+**`fit(X, y, epochs, batch_size, wd, loss_function, graphical, real_time, log_plot)`**
+
+Trains the model on data.
+
+- `X` (array): Training features
+- `y` (array): Training labels
+- `epochs` (int): Number of training epochs
+- `batch_size` (int): Batch size for training
+- `wd` (float): Weight decay factor for regularization
+- `loss_function` (str): 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' for custom delta)
+- `graphical` (bool): Display training plot
+- `real_time` (bool): Update training plot in real-time
+- `log_plot` (bool): Display plot in semilogy scale
+- Returns: Final prediction of training (array)
+
+**`predict(X)`**
+
+Makes predictions on new data.
+
+- `X` (array): Input features
 - Returns: Predictions (array)
 
 **`save_model(path)`**
