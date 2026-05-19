@@ -5,9 +5,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="saann",
-    version="0.2.0",
+    version="0.2.6",
     author="Alessio Branda",
-    description="Self-automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture, now with CNN support and GPU acceleration",
+    description="Self-automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture, now with CNN and RNNs support and GPU acceleration",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ale99bra/SaANN.git",
