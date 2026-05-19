@@ -3,6 +3,45 @@ import numpy as np
 from saann.models import SequentialModel, CNN, RecurrentModel
 from saann.processing import train_test_split
 
+def generate_sine_wave_dataset(
+        num_samples=2000,
+        seq_len=20,
+        freq=0.05,
+        noise=0.0,
+        many_to_one=True
+    ):
+        """
+        Generates a sine wave dataset for RNN testing.
+        """
+
+        # 1. Generate raw sine wave
+        x = np.arange(num_samples + seq_len)
+        y = np.sin(2 * np.pi * freq * x)
+
+        # Optional noise
+        if noise > 0:
+            y += noise * np.random.randn(len(y))
+
+        # 2. Build sequences
+        X = []
+        Y = []
+
+        for i in range(num_samples):
+            seq = y[i : i + seq_len]
+            X.append(seq)
+
+            if many_to_one:
+                # Predict next value
+                Y.append(y[i + seq_len])
+            else:
+                # Predict the whole sequence
+                Y.append(seq)
+
+        X = np.array(X).reshape(num_samples, seq_len, 1)   # (batch, seq_len, input_dim)
+        Y = np.array(Y).reshape(num_samples, -1, 1) if not many_to_one else np.array(Y).reshape(num_samples, 1)
+
+        return X.astype(np.float32), Y.astype(np.float32)
+
 
 class TestSequentialModel(unittest.TestCase):
     """Test suite for SequentialModel class"""
@@ -216,8 +255,8 @@ class TestRecurrentModel(unittest.TestCase):
     """Testing of recurrent model"""
     
     def setUp(self):
-        self.X, self.y = self.generate_sine_wave_dataset(
-            num_samples=3000,
+        self.X, self.y = generate_sine_wave_dataset(
+            num_samples=1000,
             seq_len=30,
             freq=0.03,
             noise=0.0,
@@ -226,45 +265,6 @@ class TestRecurrentModel(unittest.TestCase):
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, split_test_percentage=0.3)
 
-    def generate_sine_wave_dataset(
-        num_samples=2000,
-        seq_len=20,
-        freq=0.05,
-        noise=0.0,
-        many_to_one=True
-    ):
-        """
-        Generates a sine wave dataset for RNN testing.
-        """
-
-        # 1. Generate raw sine wave
-        x = np.arange(num_samples + seq_len)
-        y = np.sin(2 * np.pi * freq * x)
-
-        # Optional noise
-        if noise > 0:
-            y += noise * np.random.randn(len(y))
-
-        # 2. Build sequences
-        X = []
-        Y = []
-
-        for i in range(num_samples):
-            seq = y[i : i + seq_len]
-            X.append(seq)
-
-            if many_to_one:
-                # Predict next value
-                Y.append(y[i + seq_len])
-            else:
-                # Predict the whole sequence
-                Y.append(seq)
-
-        X = np.array(X).reshape(num_samples, seq_len, 1)   # (batch, seq_len, input_dim)
-        Y = np.array(Y).reshape(num_samples, -1, 1) if not many_to_one else np.array(Y).reshape(num_samples, 1)
-
-        return X.astype(np.float32), Y.astype(np.float32)
-    
     def test_vanilla_w_o_RMSNorm(self):
         model = RecurrentModel()
         model.construct(
