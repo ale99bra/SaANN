@@ -110,18 +110,14 @@ pip install -r requirements.txt
 ```
 
 ### Optional: GPU Support (CuPy)
-
-For GPU acceleration with CUDA 12.x:
-
+SaANN supports optional GPU acceleration through CuPy, which provides a NumPy‑compatible API backed by CUDA.
+GPU support is not installed by default.
+To install SaANN with GPU extras
 ```bash
 pip install saann[gpu]
 ```
-
-Or manually:
-
-```bash
-pip install cupy-cuda12x>=14.0
-```
+The `gpu` extra installs CuPy bindings, but you must still install the correct CUDA‑enabled CuPy wheel (e.g., `cupy-cuda12x[ctk]`) depending on your system.
+For more info, refer to [CuPy Installation](https://docs.cupy.dev/en/stable/install.html).
 
 SaANN automatically switches between NumPy and CuPy based on configuration.
 
