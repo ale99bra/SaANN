@@ -288,12 +288,44 @@ class MLP:
 
         return curr_d_loss
     
+# RNN Layers
+
+class RMSNorm:
+
+    def __init__(self, dimensions, epsilon = 1e-8):
+        self.dim = dimensions
+        self.eps = epsilon
+        
+        # g = scale vector
+        self.g = BE.xp.ones((self.dim,))
+
+        # gradient of g
+        self.d_g = BE.xp.zeros_like(self.g)
+    
+    def forward(self, x):
+        # Calculate root mean square
+        rms = BE.xp.sqrt(BE.xp.mean(x * x, axis=-1, keepdims=True) + self.eps)
+        norm = x / rms
+        return norm * self.g, x, norm, rms
+    
+    def backward(self, d_out, x, norm, rms):     
+        # Gradient wrt g
+        self.d_g += BE.xp.sum(d_out * norm, axis=0)
+
+        # Gradient wrt x
+        d_norm = d_out * self.g
+        d_x = (d_norm / rms) - (x * BE.xp.mean(d_norm * x, axis=-1, keepdims=True) / (rms**3))
+        return d_x
+    
 class RNNLayer:
 
-    def __init__(self, input_dim, hidden_dim, activation_function="tanh", init_function = "xavier", random_scale = 0.01):
+    def __init__(self, input_dim, hidden_dim, activation_function="tanh", init_function = "xavier", normalization = True, random_scale = 0.01):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.activation = activation_function
+        self.normalization = normalization
+        self.rmsnorm = RMSNorm(dimensions=hidden_dim)
+        self.seq_len = 1
 
         # activation function
         if self.activation == "sigmoid":
@@ -346,13 +378,19 @@ class RNNLayer:
         H = BE.xp.zeros((batch, seq_len, self.hidden_dim))
         h_prev = BE.xp.zeros((batch, self.hidden_dim))
 
-        cache = {"X": X, "H": [], "h_prev": [], "Z": []}
+        cache = {"X": X, "H": [], "h_prev": [], "Z": [], "h_raw": [], "rms_x_list": []}
 
         for t in range(seq_len):
             x_t = X[:, t, :]
             z_t = x_t @ self.weights_xh + h_prev @ self.weights_hh + self.biases_h
             h_t = self.act_function(z_t)
-            
+
+            cache["h_raw"].append(h_t)
+
+            if self.normalization:
+                h_t, x_t_norm_in, norm_t, rms_t = self.rmsnorm.forward(x = h_t)
+                cache["rms_x_list"].append((x_t_norm_in, norm_t, rms_t))
+
             H[:, t, :] = h_t
 
             cache["Z"].append(z_t)
@@ -366,6 +404,8 @@ class RNNLayer:
         X = cache["X"]
         H_list = cache["H"]
         h_prev_list = cache["h_prev"]
+        h_raw_list = cache["h_raw"]
+        rms_x_list = cache["rms_x_list"]
 
         batch, seq_len, _ = X.shape
 
@@ -376,15 +416,23 @@ class RNNLayer:
         d_X = BE.xp.zeros_like(X)
         d_h_next = BE.xp.zeros((batch, self.hidden_dim))
 
+        if self.normalization:
+            self.rmsnorm.d_g = BE.xp.zeros_like(self.rmsnorm.d_g)
+
         for t in reversed(range(seq_len)):
             h_t = H_list[t]
             h_prev = h_prev_list[t]
+            h_raw = h_raw_list[t]
 
             # total gradient at this timestep
             d_h = d_H[:, t, :] + d_h_next
 
+            if self.normalization:
+                x_t_norm_in, norm_t, rms_t = rms_x_list[t]
+                d_h = self.rmsnorm.backward(d_out=d_h, x=x_t_norm_in, norm=norm_t, rms=rms_t)
+
             # derivative of activation
-            d_activ = self.d_act(h_t) * d_h
+            d_activ = self.d_act(h_raw) * d_h
 
             # gradients
             d_Wxh += X[:, t, :].T @ d_activ
@@ -406,6 +454,11 @@ class RNNLayer:
     
     def update(self, learning_rate, wd=1e-5):
 
+        if self.normalization:
+            self.rmsnorm.d_g = clip(self.rmsnorm.d_g, clip_value=0.5)
+            self.rmsnorm.d_g /= self.seq_len
+            self.rmsnorm.g -= (learning_rate*0.1) * self.rmsnorm.d_g
+
         self.d_Wxh = clip(self.d_Wxh)
         self.d_Whh = clip(self.d_Whh)
         self.d_bh = clip(self.d_bh)
@@ -417,9 +470,12 @@ class RNNLayer:
     
 class GRULayer:
 
-    def __init__(self, input_dim, hidden_dim, init_function = "xavier"):
+    def __init__(self, input_dim, hidden_dim, init_function = "xavier", normalization = True):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+        self.normalization = normalization
+        self.rmsnorm = RMSNorm(dimensions=hidden_dim)
+        self.seq_len = 1
         
         if init_function == "random":
             warnings.warn(message="The 'random' initiation is unstable. 'xavier' initiation is recommended for GRU.", category=UserWarning)
@@ -475,17 +531,24 @@ class GRULayer:
 
         H = BE.xp.zeros((batch_size, seq_len, self.hidden_dim))
 
-        z_list, r_list, h_tilde_list, h_list = [], [], [], []
+        z_list, r_list, h_tilde_list, h_list, h_raw, rms_x_list = [], [], [], [], [], []
 
         for t in range(seq_len):
             x_t = X[:, t, :]
+            h_prev = h_raw[t-1] if t > 0 else h0
 
-            z_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_z) + BE.xp.dot(h_t, self.weights_U_z) + self.biases_z)
-            r_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_r) + BE.xp.dot(h_t, self.weights_U_r) + self.biases_r)
+            z_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_z) + BE.xp.dot(h_prev, self.weights_U_z) + self.biases_z)
+            r_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_r) + BE.xp.dot(h_prev, self.weights_U_r) + self.biases_r)
 
-            h_tilde = AF.tanh(BE.xp.dot(x_t, self.weights_W_h) + BE.xp.dot(r_t * h_t, self.weights_U_h) + self.biases_h)
+            h_tilde = AF.tanh(BE.xp.dot(x_t, self.weights_W_h) + BE.xp.dot(r_t * h_prev, self.weights_U_h) + self.biases_h)
 
-            h_t = (1 - z_t) * h_tilde + z_t * h_t
+            h_t = (1 - z_t) * h_tilde + z_t * h_prev
+
+            h_raw.append(h_t)
+
+            if self.normalization:
+                h_t, x_t_norm_in, norm_t, rms_t = self.rmsnorm.forward(x=h_t)
+                rms_x_list.append((x_t_norm_in, norm_t, rms_t))
 
             H[:, t, :] = h_t
 
@@ -500,6 +563,8 @@ class GRULayer:
             "r": r_list,
             "h_tilde": h_tilde_list,
             "h": h_list,
+            "rms_x": rms_x_list,
+            "h_raw": h_raw,
             "h0": h0
         }
 
@@ -529,20 +594,30 @@ class GRULayer:
 
         h_list = cache["h"]
         h0 = cache["h0"]
+        h_raw_list = cache["h_raw"]
+        rms_x_list = cache["rms_x"]
 
         d_X = BE.xp.zeros_like(X)
         d_h_next = BE.xp.zeros((batch, self.hidden_dim))
 
+        if self.normalization:
+            self.rmsnorm.d_g = BE.xp.zeros_like(self.rmsnorm.d_g)
+
         for t in reversed(range(seq_len)):
             x_t = X[:, t, :]
             h_t = h_list[t]
-            h_prev = h_list[t-1] if t > 0 else h0
+            #h_prev = h_list[t-1] if t > 0 else h0
+            h_prev = h_raw_list[t-1] if t > 0 else h0
             z_t = z_list[t]
             r_t = r_list[t]
             h_tilde = h_tilde_list[t]
 
             # total gradient at this timestep
             d_h = d_H[:, t, :] + d_h_next
+
+            if self.normalization:
+                x_t_norm_in, norm_t, rms_t = rms_x_list[t]
+                d_h = self.rmsnorm.backward(d_h, x_t_norm_in, norm_t, rms_t)
 
             # gradients h_prev
             d_h_tilde = d_h * (1 - z_t)
@@ -595,6 +670,11 @@ class GRULayer:
     
     def update(self, learning_rate, wd = 1e-5):
 
+        if self.normalization:
+            self.rmsnorm.d_g = clip(self.rmsnorm.d_g, clip_value=0.5)
+            self.rmsnorm.d_g /= self.seq_len
+            self.rmsnorm.g -= (learning_rate*0.1) * self.rmsnorm.d_g
+
         self.d_Wz = clip(self.d_Wz)
         self.d_Uz = clip(self.d_Uz)
         self.d_bz = clip(self.d_bz)
@@ -623,9 +703,12 @@ class GRULayer:
 
 class LSTMLayer:
 
-    def __init__(self, input_dim, hidden_dim, init_function="xavier"):
+    def __init__(self, input_dim, hidden_dim, init_function="xavier", normalization = True):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+        self.normalization = normalization
+        self.rmsnorm = RMSNorm(dimensions=hidden_dim)
+        self.seq_len = 1
 
         # Initialization selection
         if init_function == "random":
@@ -664,21 +747,25 @@ class LSTMLayer:
 
         if h0 is None:
             h_t = BE.xp.zeros((batch, self.hidden_dim))
+            h0 = BE.xp.zeros((batch, self.hidden_dim))
         else:
             h_t = h0
 
         if c0 is None:
             c_t = BE.xp.zeros((batch, self.hidden_dim))
+            c0 = BE.xp.zeros((batch, self.hidden_dim))
         else:
             c_t = c0
 
         H = BE.xp.zeros((batch, seq_len, self.hidden_dim))
 
         f_list, i_list, o_list = [], [], []
-        c_tilde_list, c_list, h_list = [], [], []
+        c_tilde_list, c_list, h_list, rms_x_list, h_raw = [], [], [], [], []
 
         for t in range(seq_len):
             x_t = X[:, t, :]
+
+            h_t = h_raw[t-1] if t > 0 else h0
 
             f_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_f) + BE.xp.dot(h_t, self.weights_U_f) + self.biases_f)
             i_t = AF.sigmoid(BE.xp.dot(x_t, self.weights_W_i) + BE.xp.dot(h_t, self.weights_U_i) + self.biases_i)
@@ -688,6 +775,12 @@ class LSTMLayer:
 
             c_t = f_t * c_t + i_t * c_tilde
             h_t = o_t * AF.tanh(c_t)
+
+            h_raw.append(h_t)
+
+            if self.normalization:
+                h_t, x_t_norm_in, norm_t, rms_t = self.rmsnorm.forward(h_t)
+                rms_x_list.append((x_t_norm_in, norm_t, rms_t))
 
             H[:, t, :] = h_t
 
@@ -706,6 +799,8 @@ class LSTMLayer:
             "c_tilde": c_tilde_list,
             "c": c_list,
             "h": h_list,
+            "h_raw": h_raw,
+            "rms_x": rms_x_list,
             "h0": h0 if h0 is not None else BE.xp.zeros_like(h_list[0]),
             "c0": c0 if c0 is not None else BE.xp.zeros_like(c_list[0]),
         }
@@ -722,6 +817,8 @@ class LSTMLayer:
         c_tilde_list = cache["c_tilde"]
         c_list = cache["c"]
         h_list = cache["h"]
+        h_raw_list = cache["h_raw"]
+        rms_x_list = cache["rms_x"]
         h0 = cache["h0"]
         c0 = cache["c0"]
 
@@ -746,12 +843,16 @@ class LSTMLayer:
         dh_next = BE.xp.zeros((batch, self.hidden_dim))
         dc_next = BE.xp.zeros((batch, self.hidden_dim))
 
+        if self.normalization:
+            self.rmsnorm.d_g = BE.xp.zeros_like(self.rmsnorm.d_g)
+
         for t in reversed(range(seq_len)):
             x_t = X[:, t, :]
             h_t = h_list[t]
             c_t = c_list[t]
-            h_prev = h_list[t-1] if t > 0 else h0
+            #h_prev = h_list[t-1] if t > 0 else h0
             c_prev = c_list[t-1] if t > 0 else c0
+            h_prev = h_raw_list[t-1] if t > 0 else h0
 
             f_t = f_list[t]
             i_t = i_list[t]
@@ -759,6 +860,10 @@ class LSTMLayer:
             c_tilde = c_tilde_list[t]
 
             dh = dH[:, t, :] + dh_next
+
+            if self.normalization:
+                x_t_norm_in, norm_t, rms_t = rms_x_list[t]
+                dh = self.rmsnorm.backward(dh, x_t_norm_in, norm_t, rms_t)
 
             do = dh * AF.tanh(c_t)
             do_raw = AF.sigmoid_der(o_t) * do
@@ -816,6 +921,11 @@ class LSTMLayer:
         return dX
     
     def update(self, learning_rate, wd=1e-5):
+
+        if self.normalization:
+            self.rmsnorm.d_g = clip(self.rmsnorm.d_g, clip_value=0.5)
+            self.rmsnorm.d_g /= self.seq_len
+            self.rmsnorm.g -= (learning_rate*0.1) * self.rmsnorm.d_g
         
         self.d_W_f = clip(self.d_W_f)
         self.d_U_f = clip(self.d_U_f)

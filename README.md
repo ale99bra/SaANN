@@ -41,12 +41,22 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 
 - Pure NumPy/CuPy implementation
 - Vanilla RNN, GRU, and LSTM cells
+    - GRU and LSTM perform best on complex or long‑range sequence tasks
+    - On simple periodic signals, a vanilla RNN may outperform them
 - Many‑to‑one and many‑to‑many modes
+    - `many_to_one=True`: only the final hidden state is passed to the Dense head
+    - `many_to_one=False`: outputs at every timestep (sequence‑to‑sequence)
 - Customizable hidden dimension, activation, and initialization
+    - For GRU/LSTM, Xavier initialization is recommended for stability
 - Full backpropagation through time (BPTT)
 - Gradient clipping for stability
+- Root-Mean-Squared Normalization (RMSNorm) included
+    - RMSNorm helps stabilize training on long sequences or tasks with large activation variance
+    - When using RMSNorm with GRU/LSTM, a smaller learning rate (e.g., 1e‑4) is recommended
+        - SaANN already makes up for this by applying only 10% of the chosen learning rate to the scale-vector updates
 - Compatible with GPU acceleration
 - Dense head for regression or classification
+- **⚠️ Important**: RNNs are still under development. Future updates might improve current performance
 
 ### 💾 Model Management
 
@@ -142,6 +152,56 @@ model.fit(X_train, y_train, epochs=1000, batch_size=32, wd=0.01, loss_function='
 y_pred = model.predict(X_test)
 ```
 
+### RNN Example
+
+```python
+from saann.models import RecurrentModel
+from saann.metrics import Metrics
+import numpy as np
+
+text = "The quick brown fox jumps over the lazy dog"
+
+text = text * 1000
+
+X, y, c2i, i2c, vocab = generate_text_dataset(text, seq_len=43) #create dataset (external function that generate one-hot targets)
+
+model = RecurrentModel(rnn_type='lstm', gpu=False) # rnn_type can be 'lstm', 'gru' or None for vanilla RNN
+model.construct(
+    input_dim=vocab,
+    hidden_dim=128,
+    output_dim=vocab,
+    learning_rate=3e-3,
+    activation_function="softmax",
+    act_function_rnn="tanh",
+    many_to_one=False,
+    normalization=True # applies RMSNorm
+)
+
+model.fit(X, y, epochs=200, batch_size=32, loss_function="cross-entropy", graphical=True)
+
+test_text = "The quick brown fox jumps over the lazy dog"
+
+X, y, c2i, i2c, vocab = generate_text_dataset(test_text, seq_len=1)
+
+y_pred = model.predict(X)
+
+ce = cross_entropy(y_true=y, y_pred=y_pred)
+print("CE prediction:", ce)
+
+print(f"Text = {test_text}, seq_len = 4, c2i = {c2i}, i2c: {i2c}")
+print("y:",y)
+print("y_pred:",y_pred)
+
+i = 0
+for yi in y:
+    print(f"Real: {np.argmax(yi)}, Pred: {np.argmax(y_pred[i])}")
+    i += 1
+
+metrics = Metrics(y_test=y, y_pred=y_pred)
+metrics.report()
+
+```
+
 ### CNN Example — Flower Classification
 
 Classify flowers using the Kaggle flowers dataset (daisy, dandelion, rose, sunflower, tulip):
@@ -198,55 +258,6 @@ MCC: ~0.04
 ```
 
 These results are expected for a small dataset, 20 epochs, and an educational CNN.
-
-### RNN Example
-
-```python
-from saann.models import RecurrentModel
-from saann.metrics import Metrics
-import numpy as np
-
-text = "The quick brown fox jumps over the lazy dog"
-
-text = text * 1000
-
-X, y, c2i, i2c, vocab = generate_text_dataset(text, seq_len=43) #create dataset (external function that generate one-hot targets)
-
-model = RecurrentModel(rnn_type='lstm', gpu=False) # rnn_type can be 'lstm', 'gru' or None for vanilla RNN
-model.construct(
-    input_dim=vocab,
-    hidden_dim=128,
-    output_dim=vocab,
-    learning_rate=3e-3,
-    activation_function="softmax",
-    act_function_rnn="tanh",
-    many_to_one=False
-)
-
-model.fit(X, y, epochs=200, batch_size=32, loss_function="cross-entropy", graphical=True)
-
-test_text = "The quick brown fox jumps over the lazy dog"
-
-X, y, c2i, i2c, vocab = generate_text_dataset(test_text, seq_len=1)
-
-y_pred = model.predict(X)
-
-ce = cross_entropy(y_true=y, y_pred=y_pred)
-print("CE prediction:", ce)
-
-print(f"Text = {test_text}, seq_len = 4, c2i = {c2i}, i2c: {i2c}")
-print("y:",y)
-print("y_pred:",y_pred)
-
-i = 0
-for yi in y:
-    print(f"Real: {np.argmax(yi)}, Pred: {np.argmax(y_pred[i])}")
-    i += 1
-
-metrics = Metrics(y_test=y, y_pred=y_pred)
-metrics.report()
-
-```
 
 ### Model Saving & Loading
 

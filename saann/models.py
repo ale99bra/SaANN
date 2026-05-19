@@ -14,7 +14,7 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.2.5"
+VERSION = "0.2.6"
 LIST_VERSIONS_COMPATIBLE = [VERSION]
 
 def im2col(X, K, stride, padding):
@@ -1473,7 +1473,7 @@ class RecurrentModel:
             self.flag_gpu = False
             BE.use_cpu()
 
-    def construct(self, input_dim, hidden_dim, output_dim, activation_function, init_function = "he", learning_rate=0.001, random_scale = 0.01, act_function_rnn='tanh', init_function_rnn='xavier', random_scale_rnn=0.01, many_to_one=True, dropout = False):
+    def construct(self, input_dim, hidden_dim, output_dim, activation_function, init_function = "he", learning_rate=0.001, random_scale = 0.01, act_function_rnn='tanh', init_function_rnn='xavier', random_scale_rnn=0.01, many_to_one=True, dropout = False, normalization = True):
         """
         Construct the RNN and Dense layers\n
         Parameters
@@ -1498,19 +1498,20 @@ class RecurrentModel:
             )
         """
         batch_norm = False
-        self.construction = [input_dim, hidden_dim, output_dim, activation_function, init_function, learning_rate, random_scale, act_function_rnn, init_function_rnn, random_scale_rnn, many_to_one, dropout]
+        self.construction = [input_dim, hidden_dim, output_dim, activation_function, init_function, learning_rate, random_scale, act_function_rnn, init_function_rnn, random_scale_rnn, many_to_one, dropout, normalization]
         self.learning_rate = learning_rate
         if self.rnn_type == 'gru':
-            self.rnn = GRULayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn)  
+            self.rnn = GRULayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn, normalization=normalization)  
         elif self.rnn_type == "lstm":
-            self.rnn = LSTMLayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn)
+            self.rnn = LSTMLayer(input_dim=input_dim, hidden_dim=hidden_dim, init_function=init_function_rnn, normalization=normalization)
         else:
-            self.rnn = RNNLayer(input_dim=input_dim, hidden_dim=hidden_dim, activation_function=act_function_rnn, init_function=init_function_rnn, random_scale=random_scale_rnn)
+            self.rnn = RNNLayer(input_dim=input_dim, hidden_dim=hidden_dim, activation_function=act_function_rnn, init_function=init_function_rnn, random_scale=random_scale_rnn, normalization=normalization)
         self.dense = DenseLayer(extras= [batch_norm, dropout], num_inputs=hidden_dim, num_neurons=output_dim, activation_function=activation_function, init_function=init_function, random_scale=random_scale)
         self.many_to_one = many_to_one
         self.optimizer = SGD(learning_rate=learning_rate)
 
     def forward(self, X):
+        self.rnn.seq_len = X.shape[1]
         H, cache = self.rnn.forward(X)
         if self.many_to_one:
             out = self.dense.forward(H[:, -1, :])
