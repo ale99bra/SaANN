@@ -215,7 +215,7 @@ class TestCNN(unittest.TestCase):
 class TestRecurrentModel(unittest.TestCase):
     """Testing of recurrent model"""
     
-    def __init__(self):
+    def setUp(self):
         self.X, self.y = self.generate_sine_wave_dataset(
             num_samples=3000,
             seq_len=30,
