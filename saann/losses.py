@@ -4,6 +4,7 @@
 
 import numpy as np
 from . import backend as BE
+from . import activation_functions as AF
 
 # Loss functions and their derivative
 def MSE(y_true, y_pred):
@@ -115,6 +116,59 @@ def cross_entropy_der(y_true, y_pred):
     :param y_pred: Array of values predicted by the model.
     """
     return (y_pred - y_true)
+
+def cross_entropy_logits(logits, target_ids):
+    """
+    Calculates the cross entropy loss for logits.\n
+    Parameters
+    ----------
+    :param logits: Logits in shape (B, L, V)
+    :param target_ids: (B, L) integer token IDs
+    """
+    B, L, V = logits.shape
+
+    # softmax over last dimension
+    logits_2d = logits.reshape(B * L, V)
+    probs_2d = AF.softmax(logits_2d)  # uses your existing softmax
+    probs = probs_2d.reshape(B, L, V)
+
+    # build one-hot targets
+    y_true = BE.xp.zeros_like(probs)
+    for b in range(B):
+        for l in range(L):
+            y_true[b, l, target_ids[b, l]] = 1.0
+
+    # compute CE using your existing function
+    loss = cross_entropy(
+        y_true.reshape(B * L, V),
+        probs.reshape(B * L, V)
+    )
+    return loss
+
+
+def cross_entropy_logits_der(logits, target_ids):
+    """
+    Computes gradient wrt logits. Equivalent to softmax(logits) - one_hot(target).\n
+    Parameters
+    ----------
+    :param logits: Logits in shape (B, L, V)
+    :param target_ids: (B, L) integer token IDs
+    """
+    B, L, V = logits.shape
+
+    logits_2d = logits.reshape(B * L, V)
+    probs_2d = AF.softmax(logits_2d)
+    probs = probs_2d.reshape(B, L, V)
+
+    # build one-hot
+    y_true = BE.xp.zeros_like(probs)
+    for b in range(B):
+        for l in range(L):
+            y_true[b, l, target_ids[b, l]] = 1.0
+
+    # derivative wrt logits
+    grad = (probs - y_true)
+    return grad
 
 if __name__ == "__main__":
     pred = BE.xp.linspace(0, 100, num = 26)
