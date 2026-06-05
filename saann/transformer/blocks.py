@@ -95,20 +95,22 @@ class LayerNorm:
         embed_dim: dimension of the last axis to normalize
         eps: numerical stability constant
         """
+        self.embed_dim = embed_dim
+        self.eps = eps
 
-        # Learnable parameters
+        # learnable parameters
         self.gamma = BE.xp.ones((embed_dim,))
         self.beta  = BE.xp.zeros((embed_dim,))
 
-        # Gradients
-        self.dgamma = BE.xp.zeros_like(self.gamma)
-        self.dbeta  = BE.xp.zeros_like(self.beta)
+        # gradients
+        self.d_gamma = BE.xp.zeros_like(self.gamma)
+        self.d_beta  = BE.xp.zeros_like(self.beta)
 
         # Cache for backward
-        self.eps = eps
+        self.x = None
         self.mean = None
         self.var = None
-        self.x_centered = None
+        self.x_hat = None
         self.inv_std = None
 
     def forward(self, x):
@@ -116,18 +118,41 @@ class LayerNorm:
         x: (batch, seq_len, embed_dim)
         returns: normalized tensor with same shape
         """
-        raise NotImplementedError
+        self.x = x
+        self.mean = BE.xp.mean(x, axis=1, keepdims=True)
+        self.var = BE.xp.var(x, axis=1, keepdims=True)
+        self.inv_std = 1.0 / BE.xp.sqrt(self.var + self.eps)
+        self.x_hat = (x - self.mean) * self.inv_std
+        out = self.x_hat * self.gamma + self.beta
+
+        return out
 
     def backward(self, grad_output):
         """
         grad_output: (batch, seq_len, embed_dim)
         returns: gradient wrt input x
         """
-        raise NotImplementedError
+        B, L, E = grad_output.shape
+
+        # update d_gamma and d_beta
+        self.d_gamma += BE.xp.sum(grad_output * self.x_hat, axis=(0,1))
+        self.d_beta += BE.xp.sum(grad_output, axis=(0,1))
+
+        # find d_x_hat
+        d_x_hat = grad_output * self.gamma
+
+        # backward per token
+        N = E
+        sum_d = BE.xp.sum(d_x_hat, axis=-1, keepdims=True)
+        sums = BE.xp.sum(d_x_hat * self.x_hat, axis=-1, keepdims=True)
+
+        d_x = (d_x_hat * N - sum_d - self.x_hat * sums) * (self.inv_std/N)
+
+        return d_x
 
     def zero_grad(self):
-        self.dgamma[...] = 0
-        self.dbeta[...] = 0
+        self.d_gamma[...] = 0
+        self.d_beta[...] = 0
 
 class ResidualConnection:
     """
@@ -136,7 +161,6 @@ class ResidualConnection:
     """
 
     def __init__(self):
-        # Cache for backward
         self.x = None
         self.sublayer_out = None
 
@@ -146,14 +170,20 @@ class ResidualConnection:
         sublayer_fn: a callable that takes x and returns output
         returns: x + sublayer_fn(x)
         """
-        raise NotImplementedError
+        self.x = x
+        self.sublayer_out = sublayer_fn(x)
 
-    def backward(self, grad_output):
+        return self.x + self.sublayer_out
+
+    def backward(self, grad_output, sublayer_backward_fn):
         """
         grad_output: (batch, seq_len, embed_dim)
         returns: gradient wrt input x
         """
-        raise NotImplementedError
+        grad_identity = grad_output # identity patch
+        grad_sublayer = sublayer_backward_fn(grad_output)
+
+        return grad_identity + grad_sublayer
     
 class TransformerBlock:
     """
@@ -169,6 +199,9 @@ class TransformerBlock:
         num_heads: number of attention heads
         ff_hidden_dim: hidden dimension of the FFN (usually 4 * embed_dim)
         """
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.ff_hidden_dim = ff_hidden_dim
 
         # Sublayers
         self.ln1 = LayerNorm(embed_dim)
@@ -181,6 +214,8 @@ class TransformerBlock:
 
         # Cache for backward
         self.x = None
+        self.x1 = None
+        self.x2 = None
 
     def forward(self, x, mask=None):
         """
@@ -188,14 +223,40 @@ class TransformerBlock:
         mask: optional (batch, 1, seq_len, seq_len)
         returns: (batch, seq_len, embed_dim)
         """
-        raise NotImplementedError
+        self.x = x
+
+        # block 1: LayerNorm -> MultiHeadAttention -> Residual
+        ln1_out = self.ln1.forward(x)
+        attn_out = self.attn.forward(ln1_out, mask)
+
+        self.x1 = self.res1.forward(x, lambda x_: attn_out)
+
+        # block 1: LayerNorm -> FFN -> Residual
+        ln2_out = self.ln2.forward(self.x1)
+        ffn_out = self.ffn.forward(ln2_out)
+
+        self.x2 = self.res2.forward(self.x1, lambda x_: ffn_out)
+
+        return self.x2
 
     def backward(self, grad_output):
         """
         grad_output: (batch, seq_len, embed_dim)
         returns: gradient wrt input x
         """
-        raise NotImplementedError
+
+        # define backwards
+        def ffn_backward(f):
+            return self.ffn.backward(self.ln2.backward(f))
+        
+        def attn_backward(f):
+            return self.attn.backward(self.ln1.backward(f))
+        
+        # backwards through res2
+        grad_x1 = self.res2.backward(grad_output, ffn_backward)
+        grad_x0 = self.res1.backward(grad_x1, attn_backward)
+
+        return grad_x0
 
     def zero_grad(self):
         self.ln1.zero_grad()
