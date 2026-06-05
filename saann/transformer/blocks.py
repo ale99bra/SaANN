@@ -59,7 +59,7 @@ class FeedForward:
         # update gradients of layer 2
         a_2D = self.a.reshape(B*L, self.hidden_dim)
         grad_out_2D = grad_output.reshape(B*L, E)
-        self.d_w2 += BE.xp.matmul(a_2D.T, grad_out_2D)
+        self.d_W2 += BE.xp.matmul(a_2D.T, grad_out_2D)
         self.d_b2 += BE.xp.sum(grad_output, axis = (0,1))
 
         # gradient of act
@@ -119,8 +119,8 @@ class LayerNorm:
         returns: normalized tensor with same shape
         """
         self.x = x
-        self.mean = BE.xp.mean(x, axis=1, keepdims=True)
-        self.var = BE.xp.var(x, axis=1, keepdims=True)
+        self.mean = BE.xp.mean(x, axis=-1, keepdims=True)
+        self.var = BE.xp.var(x, axis=-1, keepdims=True)
         self.inv_std = 1.0 / BE.xp.sqrt(self.var + self.eps)
         self.x_hat = (x - self.mean) * self.inv_std
         out = self.x_hat * self.gamma + self.beta
@@ -225,7 +225,7 @@ class TransformerBlock:
         """
         self.x = x
 
-        # block 1: LayerNorm -> MultiHeadAttention -> Residual
+        # block 2: LayerNorm -> MultiHeadAttention -> Residual
         ln1_out = self.ln1.forward(x)
         attn_out = self.attn.forward(ln1_out, mask)
 
