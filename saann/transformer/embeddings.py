@@ -16,10 +16,10 @@ class PositionalEmbedding:
         if learned:
             limit = 1.0 / BE.xp.sqrt(dim)
             self.W = BE.xp.random.uniform(-limit, limit, (seq_len, dim))
-            self.dW = BE.xp.zeros_like(self.W)
+            self.d_W = BE.xp.zeros_like(self.W)
         else:
             self.W = self._build_sinusoidal_embeddings(seq_len, dim)
-            self.dW = None
+            self.d_W = None
 
     def _build_sinusoidal_embeddings(self, seq_len, dim):
         pe = BE.xp.zeros((seq_len, dim))
@@ -41,9 +41,43 @@ class PositionalEmbedding:
 
     def backward(self, grad_output):
         if self.learned:
-            self.dW += BE.xp.sum(grad_output, axis=0)
+            self.d_W += BE.xp.sum(grad_output, axis=0)
         return grad_output
 
     def zero_grad(self):
         if self.learned:
-            self.dW[...] = 0
+            self.d_W[...] = 0
+
+class TokenEmbedding:
+    def __init__(self, vocab_size, embed_dim):
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+
+        self.W = BE.xp.random.uniform(-0.01, 0.01, (vocab_size, embed_dim))
+        self.d_W = BE.xp.zeros_like(self.W)
+
+        self.tokens = None
+
+    def forward(self, tokens):
+        """
+        tokens: (batch, seq_len) int indices
+        returns: (batch, seq_len, embed_dim)
+        """
+        self.tokens = tokens
+        return self.W[tokens]
+
+    def backward(self, grad_output):
+        """
+        grad_output: (batch, seq_len, embed_dim)
+        accumulates gradients into d_W
+        """
+        B, L, E = grad_output.shape
+        #zero local grad buffer for safety
+        #(global zero_grad will clear d_W between steps)
+        for b in range(B):
+            for l in range(L):
+                idx = int(self.tokens[b, l])
+                self.d_W[idx] += grad_output[b, l]
+
+    def zero_grad(self):
+        self.d_W[...] = 0

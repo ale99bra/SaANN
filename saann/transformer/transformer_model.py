@@ -1,76 +1,6 @@
 from .. import backend as BE
 from .blocks import TransformerBlock
-
-class TokenEmbedding:
-    def __init__(self, vocab_size, embed_dim):
-        self.vocab_size = vocab_size
-        self.embed_dim = embed_dim
-
-        self.W = BE.xp.random.uniform(-0.01, 0.01, (vocab_size, embed_dim))
-        self.d_W = BE.xp.zeros_like(self.W)
-
-        self.tokens = None
-
-    def forward(self, tokens):
-        """
-        tokens: (batch, seq_len) int indices
-        returns: (batch, seq_len, embed_dim)
-        """
-        self.tokens = tokens
-        return self.W[tokens]
-
-    def backward(self, grad_output):
-        """
-        grad_output: (batch, seq_len, embed_dim)
-        accumulates gradients into d_W
-        """
-        B, L, E = grad_output.shape
-        #zero local grad buffer for safety
-        #(global zero_grad will clear d_W between steps)
-        for b in range(B):
-            for l in range(L):
-                idx = int(self.tokens[b, l])
-                self.d_W[idx] += grad_output[b, l]
-
-    def zero_grad(self):
-        self.d_W[...] = 0
-
-
-class PositionalEmbedding:
-    def __init__(self, max_seq_len, embed_dim):
-        self.max_seq_len = max_seq_len
-        self.embed_dim = embed_dim
-
-        self.W = BE.xp.random.uniform(-0.01, 0.01, (max_seq_len, embed_dim))
-        self.d_W = BE.xp.zeros_like(self.W)
-
-        self.seq_len = None
-
-    def forward(self, seq_len, batch_size):
-        """
-        returns: (batch, seq_len, embed_dim)
-        """
-        self.seq_len = seq_len
-        pos = BE.xp.arange(seq_len)
-        pos_emb = self.W[pos]
-        pos_emb = BE.xp.broadcast_to(pos_emb, (batch_size, seq_len, self.embed_dim))
-        return pos_emb
-
-    def backward(self, grad_output):
-        """
-        grad_output: (batch, seq_len, embed_dim)
-        accumulates gradients into d_W
-        """
-        B, L, E = grad_output.shape
-        pos = BE.xp.arange(L)
-        #sum over batch for each position
-        grad_pos = BE.xp.sum(grad_output, axis=0)
-        for l in range(L):
-            self.d_W[pos[l]] += grad_pos[l]
-
-    def zero_grad(self):
-        self.d_W[...] = 0
-
+from .embeddings import TokenEmbedding, PositionalEmbedding
 
 def causal_mask(seq_len, batch_size, xp):
     """
@@ -82,7 +12,6 @@ def causal_mask(seq_len, batch_size, xp):
     mask = mask[None, None, :, :]
     mask = xp.broadcast_to(mask, (batch_size, 1, seq_len, seq_len))
     return mask
-
 
 class TransformerModel:
     """
