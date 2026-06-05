@@ -37,11 +37,12 @@ class PositionalEmbedding:
 
     def forward(self, x):
         self.x = x
-        return x + self.W[BE.xp.newaxis, :, :]
+        B, L, E = x.shape
+        return x + self.W[BE.xp.newaxis, :L, :]
 
     def backward(self, grad_output):
         if self.learned:
-            self.d_W += BE.xp.sum(grad_output, axis=0)
+            self.d_W[:grad_output.shape[1]] += BE.xp.sum(grad_output, axis=0)
         return grad_output
 
     def zero_grad(self):

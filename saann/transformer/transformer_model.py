@@ -21,8 +21,7 @@ class TransformerModel:
     - final linear projection to vocab logits
     """
 
-    def __init__(self, vocab_size, embed_dim, num_heads, ff_hidden_dim,
-                 num_layers, max_seq_len):
+    def __init__(self, vocab_size, embed_dim, num_heads, ff_hidden_dim, num_layers, max_seq_len, learned_positional):
         self.vocab_size = vocab_size
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -31,7 +30,7 @@ class TransformerModel:
         self.max_seq_len = max_seq_len
 
         self.token_emb = TokenEmbedding(vocab_size, embed_dim)
-        self.pos_emb = PositionalEmbedding(max_seq_len, embed_dim)
+        self.pos_emb = PositionalEmbedding(max_seq_len, embed_dim, learned=learned_positional)
 
         self.blocks = [
             TransformerBlock(embed_dim, num_heads, ff_hidden_dim)
@@ -62,8 +61,7 @@ class TransformerModel:
             raise ValueError("Sequence length exceeds max_seq_len")
 
         tok = self.token_emb.forward(input_tokens)
-        pos = self.pos_emb.forward(L, B)
-        x = tok + pos 
+        x = self.pos_emb.forward(tok)
         self.x_embed = x
 
         mask = causal_mask(L, B, BE.xp)
