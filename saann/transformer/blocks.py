@@ -2,6 +2,7 @@
 
 from .. import backend as BE
 from .attention import MultiHeadAttention
+from .. import activation_functions as AF
 
 class FeedForward:
     """
@@ -14,40 +15,74 @@ class FeedForward:
         embed_dim: input/output dimension
         hidden_dim: inner layer dimension (usually 4 * embed_dim)
         """
+        self.embed_dim = embed_dim
+        self.hidden_dim = hidden_dim
 
-        # Parameters
+        # parameters (weights, bias) for the 2 layers
         self.W1 = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, hidden_dim))
         self.b1 = BE.xp.zeros((hidden_dim,))
 
         self.W2 = BE.xp.random.uniform(-0.01, 0.01, (hidden_dim, embed_dim))
         self.b2 = BE.xp.zeros((embed_dim,))
 
-        # Gradients
-        self.dW1 = BE.xp.zeros_like(self.W1)
-        self.db1 = BE.xp.zeros_like(self.b1)
+        # gradients of parameters
+        self.d_W1 = BE.xp.zeros_like(self.W1)
+        self.d_b1 = BE.xp.zeros_like(self.b1)
 
-        self.dW2 = BE.xp.zeros_like(self.W2)
-        self.db2 = BE.xp.zeros_like(self.b2)
+        self.d_W2 = BE.xp.zeros_like(self.W2)
+        self.d_b2 = BE.xp.zeros_like(self.b2)
+
+        self.x = None
+        self.h = None
+        self.a = None
 
     def forward(self, x):
         """
         x: (batch, seq_len, embed_dim)
         returns: (batch, seq_len, embed_dim)
         """
-        raise NotImplementedError
+        self.x = x
+        self.h = BE.xp.matmul(x, self.W1) + self.b1 #pre-activation layer
+        self.a = AF.reLU(self.h) #return BE.xp.maximum(0, x)
+
+        out = BE.xp.matmul(self.a, self.W2) + self.b2
+
+        return out
 
     def backward(self, grad_output):
         """
         grad_output: (batch, seq_len, embed_dim)
         returns: gradient wrt input x
         """
-        raise NotImplementedError
+        B, L, E = grad_output.shape
+
+        # update gradients of layer 2
+        a_2D = self.a.reshape(B*L, self.hidden_dim)
+        grad_out_2D = grad_output.reshape(B*L, E)
+        self.d_w2 += BE.xp.matmul(a_2D.T, grad_out_2D)
+        self.d_b2 += BE.xp.sum(grad_output, axis = (0,1))
+
+        # gradient of act
+        d_a = BE.xp.matmul(grad_output, BE.xp.transpose(self.W2, (1,0)))
+
+        # ReLU backward
+        d_h = AF.reLU_der(self.h) * d_a #reLU_der(f) -> return BE.xp.where(f > 0, 1, 0)
+
+        # d_W1, d_b1
+        x_2D = self.x.reshape(B*L, E)
+        d_h_2D = d_h.reshape(B*L, self.hidden_dim)
+        self.d_W1 += BE.xp.matmul(x_2D.T, d_h_2D)
+        self.d_b1 += BE.xp.sum(d_h, axis=(0,1))
+
+        d_x = BE.xp.matmul(d_h, BE.xp.transpose(self.W1, (1,0)))
+        return d_x
+
 
     def zero_grad(self):
-        self.dW1[...] = 0
-        self.db1[...] = 0
-        self.dW2[...] = 0
-        self.db2[...] = 0
+        self.d_W1[...] = 0
+        self.d_b1[...] = 0
+        self.d_W2[...] = 0
+        self.d_b2[...] = 0
 
 class LayerNorm:
     """
