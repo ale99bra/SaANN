@@ -28,6 +28,7 @@ class TransformerModel:
         self.ff_hidden_dim = ff_hidden_dim
         self.num_layers = num_layers
         self.max_seq_len = max_seq_len
+        self.learned_positional = learned_positional
 
         self.token_emb = TokenEmbedding(vocab_size, embed_dim)
         self.pos_emb = PositionalEmbedding(max_seq_len, embed_dim, learned=learned_positional)
@@ -106,6 +107,61 @@ class TransformerModel:
         # x_embed = token_emb + pos_emb
         self.token_emb.backward(d_x)
         self.pos_emb.backward(d_x)
+
+    def get_params(self):
+        # Collect parameters for AdamW
+        params = {}
+
+        # Token embedding
+        params["W_tok"] = self.token_emb.W
+        params["dW_tok"] = self.token_emb.d_W
+
+        # Positional embedding
+        params["W_pos"] = self.pos_emb.W
+        params["dW_pos"] = self.pos_emb.d_W
+
+        # Final projection
+        params["W_out"] = self.W_out
+        params["dW_out"] = self.d_W_out
+        params["b_out"] = self.b_out
+        params["db_out"] = self.d_b_out
+
+        # Blocks
+        for i, block in enumerate(self.blocks):
+            # Attention
+            params[f"W_q_{i}"] = block.attn.W_q
+            params[f"dW_q_{i}"] = block.attn.d_W_q
+            params[f"W_k_{i}"] = block.attn.W_k
+            params[f"dW_k_{i}"] = block.attn.d_W_k
+            params[f"W_v_{i}"] = block.attn.W_v
+            params[f"dW_v_{i}"] = block.attn.d_W_v
+            params[f"W_o_{i}"] = block.attn.W_o
+            params[f"dW_o_{i}"] = block.attn.d_W_o
+
+            # LayerNorm 1
+            params[f"gamma1_{i}"] = block.ln1.gamma
+            params[f"dgamma1_{i}"] = block.ln1.d_gamma
+            params[f"beta1_{i}"] = block.ln1.beta
+            params[f"dbeta1_{i}"] = block.ln1.d_beta
+
+            # LayerNorm 2
+            params[f"gamma2_{i}"] = block.ln2.gamma
+            params[f"dgamma2_{i}"] = block.ln2.d_gamma
+            params[f"beta2_{i}"] = block.ln2.beta
+            params[f"dbeta2_{i}"] = block.ln2.d_beta
+
+            # FFN
+            params[f"W1_{i}"] = block.ffn.W1
+            params[f"dW1_{i}"] = block.ffn.d_W1
+            params[f"b1_{i}"] = block.ffn.b1
+            params[f"db1_{i}"] = block.ffn.d_b1
+
+            params[f"W2_{i}"] = block.ffn.W2
+            params[f"dW2_{i}"] = block.ffn.d_W2
+            params[f"b2_{i}"] = block.ffn.b2
+            params[f"db2_{i}"] = block.ffn.d_b2
+        
+        return params
 
     def zero_grad(self):
         self.token_emb.zero_grad()

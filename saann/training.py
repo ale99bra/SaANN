@@ -1,6 +1,9 @@
 from . import backend as BE
 from .losses import cross_entropy_logits, cross_entropy_logits_der
 import os
+from .transformer.transformer_model import TransformerModel
+from .tokenizer import ByteTokenizer
+from .gradients import AdamW
 
 def train_transformer_step(model, optimizer, tokens, targets):
 
@@ -90,6 +93,7 @@ def train_transformer(
         min_lr=1e-5
     )
 
+
     for epoch in range(epochs):
         for tokens, targets in batches:
             scheduler.step()
@@ -152,6 +156,15 @@ def make_batches(tokens, batch_size, seq_len):
 def save_model(model, optimizer, tokenizer, scheduler, path="checkpoint.npz"):
     arrays = {}
 
+    #Architecture 
+    arrays["arch_vocab_size"] = model.vocab_size
+    arrays["arch_embed_dim"] = model.embed_dim
+    arrays["arch_num_heads"] = model.num_heads
+    arrays["arch_ff_hidden_dim"] = model.ff_hidden_dim
+    arrays["arch_num_layers"] = model.num_layers
+    arrays["arch_max_seq_len"] = model.max_seq_len
+    arrays["arch_learned_positional"] = model.learned_positional
+
     # Token embedding
     arrays["W_tok"] = model.token_emb.W
     arrays["b_tok"] = model.token_emb.b if hasattr(model.token_emb, "b") else None
@@ -165,6 +178,10 @@ def save_model(model, optimizer, tokenizer, scheduler, path="checkpoint.npz"):
 
     # Scheduler
     arrays["scheduler_step"] = scheduler.step_num
+    arrays["scheduler_warmup"] = scheduler.warmup_steps
+    arrays["scheduler_total"] = scheduler.total_steps
+    arrays["scheduler_max_lr"] = scheduler.max_lr
+    arrays["scheduler_min_lr"] = scheduler.min_lr
 
     # Blocks
     for i, block in enumerate(model.blocks):
@@ -189,6 +206,9 @@ def save_model(model, optimizer, tokenizer, scheduler, path="checkpoint.npz"):
         arrays[f"opt_m_{k}"] = v
     for k, v in optimizer.v.items():
         arrays[f"opt_v_{k}"] = v
+    
+    arrays["optimizer_lr"] = optimizer.lr
+    arrays["optimizer_wd"] = optimizer.wd
 
     # Tokenizer
     arrays["tokenizer_stoi"] = tokenizer.stoi
@@ -197,20 +217,58 @@ def save_model(model, optimizer, tokenizer, scheduler, path="checkpoint.npz"):
     BE.xp.savez(path, **arrays)
 
 
-def load_model(path, model, optimizer, tokenizer, scheduler):
+def load_model(path):
     data = BE.xp.load(path, allow_pickle=True)
 
-    # Token embedding
+    # 1. Reconstruct architecture
+    model = TransformerModel(
+        vocab_size=int(data["arch_vocab_size"]),
+        embed_dim=int(data["arch_embed_dim"]),
+        num_heads=int(data["arch_num_heads"]),
+        ff_hidden_dim=int(data["arch_ff_hidden_dim"]),
+        num_layers=int(data["arch_num_layers"]),
+        max_seq_len=int(data["arch_max_seq_len"]),
+        learned_positional=bool(data["arch_learned_positional"])
+    )
+
+    # 2. Reconstruct tokenizer
+    tokenizer = ByteTokenizer()
+    tokenizer.stoi = data["tokenizer_stoi"].item()
+    tokenizer.itos = data["tokenizer_itos"].item()
+
+    # 3. Reconstruct optimizer
+    optimizer = AdamW(model.get_params(),
+                      learning_rate=float(data["optimizer_lr"]),
+                      wd=float(data["optimizer_wd"]))
+
+    # Load optimizer moments
+    for k in optimizer.m.keys():
+        optimizer.m[k][...] = data[f"opt_m_{k}"]
+    for k in optimizer.v.keys():
+        optimizer.v[k][...] = data[f"opt_v_{k}"]
+
+    # 4. Reconstruct scheduler
+    scheduler = LRScheduler(
+        optimizer=optimizer,
+        warmup_steps=int(data["scheduler_warmup"]),
+        total_steps=int(data["scheduler_total"]),
+        max_lr=float(data["scheduler_max_lr"]),
+        min_lr=float(data["scheduler_min_lr"])
+    )
+    scheduler.step_num = int(data["scheduler_step"])
+
+    # Recompute LR for this step
+    current = scheduler.step_num
+    scheduler.step_num = current - 1
+    scheduler.step()
+    scheduler.step_num = current
+
+    # 5. Load model weights
     model.token_emb.W[...] = data["W_tok"]
-
-    # Positional embedding
     model.pos_emb.W[...] = data["W_pos"]
-
-    # Output projection
     model.W_out[...] = data["W_out"]
     model.b_out[...] = data["b_out"]
 
-    # Blocks
     for i, block in enumerate(model.blocks):
         block.attn.W_q[...] = data[f"W_q_{i}"]
         block.attn.W_k[...] = data[f"W_k_{i}"]
@@ -228,17 +286,5 @@ def load_model(path, model, optimizer, tokenizer, scheduler):
         block.ffn.W2[...] = data[f"W2_{i}"]
         block.ffn.b2[...] = data[f"b2_{i}"]
 
-    # Optimizer state
-    for k in optimizer.m.keys():
-        optimizer.m[k][...] = data[f"opt_m_{k}"]
-    for k in optimizer.v.keys():
-        optimizer.v[k][...] = data[f"opt_v_{k}"]
+    return model, optimizer, tokenizer, scheduler
 
-    # Tokenizer
-    tokenizer.stoi = data["tokenizer_stoi"].item()
-    tokenizer.itos = data["tokenizer_itos"].item()
-
-    scheduler.step_num = data["scheduler_step"].item()
-
-    scheduler.step()   # recompute LR for current step
-    scheduler.step_num = data["scheduler_step"].item()
