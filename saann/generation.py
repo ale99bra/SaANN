@@ -105,7 +105,10 @@ def generate_top_p(model, start_tokens, max_new_tokens, p=0.9, temperature=1.0, 
         top_p_probs = top_p_probs / BE.xp.sum(top_p_probs)
 
         # Sample
-        next_token = BE.xp.random.choice(top_p_indices, p=top_p_probs)
+        if BE.xp.__name__ == "cupy":
+            next_token = BE.xp.random.choice(top_p_indices, size=1, p=top_p_probs)[0]
+        else:
+            next_token = BE.xp.random.choice(top_p_indices, p=top_p_probs)
 
         # Append
         next_token = BE.xp.array([[int(next_token)]])

@@ -4,6 +4,7 @@ import os
 from .transformer.transformer_model import TransformerModel
 from .tokenizer import ByteTokenizer
 from .gradients import AdamW
+import numpy as np
 
 def train_transformer_step(model, optimizer, tokens, targets):
 
@@ -220,6 +221,12 @@ def save_model(model, optimizer, tokenizer, scheduler, path="checkpoint.npz"):
 def load_model(path):
     data = BE.xp.load(path, allow_pickle=True)
 
+    data = BE.to_numpy(data)
+
+    data = np.load(path, allow_pickle=True)
+
+    to_xp = BE.xp.asarray
+
     # 1. Reconstruct architecture
     model = TransformerModel(
         vocab_size=int(data["arch_vocab_size"]),
@@ -243,9 +250,9 @@ def load_model(path):
 
     # Load optimizer moments
     for k in optimizer.m.keys():
-        optimizer.m[k][...] = data[f"opt_m_{k}"]
+        optimizer.m[k][...] = to_xp(data[f"opt_m_{k}"])
     for k in optimizer.v.keys():
-        optimizer.v[k][...] = data[f"opt_v_{k}"]
+        optimizer.v[k][...] = to_xp(data[f"opt_v_{k}"])
 
     # 4. Reconstruct scheduler
     scheduler = LRScheduler(
@@ -264,27 +271,27 @@ def load_model(path):
     scheduler.step_num = current
 
     # 5. Load model weights
-    model.token_emb.W[...] = data["W_tok"]
-    model.pos_emb.W[...] = data["W_pos"]
-    model.W_out[...] = data["W_out"]
-    model.b_out[...] = data["b_out"]
+    model.token_emb.W[...] = to_xp(data["W_tok"])
+    model.pos_emb.W[...] = to_xp(data["W_pos"])
+    model.W_out[...] = to_xp(data["W_out"])
+    model.b_out[...] = to_xp(data["b_out"])
 
     for i, block in enumerate(model.blocks):
-        block.attn.W_q[...] = data[f"W_q_{i}"]
-        block.attn.W_k[...] = data[f"W_k_{i}"]
-        block.attn.W_v[...] = data[f"W_v_{i}"]
-        block.attn.W_o[...] = data[f"W_o_{i}"]
+        block.attn.W_q[...] = to_xp(data[f"W_q_{i}"])
+        block.attn.W_k[...] = to_xp(data[f"W_k_{i}"])
+        block.attn.W_v[...] = to_xp(data[f"W_v_{i}"])
+        block.attn.W_o[...] = to_xp(data[f"W_o_{i}"])
 
-        block.ln1.gamma[...] = data[f"gamma1_{i}"]
-        block.ln1.beta[...] = data[f"beta1_{i}"]
+        block.ln1.gamma[...] = to_xp(data[f"gamma1_{i}"])
+        block.ln1.beta[...] = to_xp(data[f"beta1_{i}"])
 
-        block.ln2.gamma[...] = data[f"gamma2_{i}"]
-        block.ln2.beta[...] = data[f"beta2_{i}"]
+        block.ln2.gamma[...] = to_xp(data[f"gamma2_{i}"])
+        block.ln2.beta[...] = to_xp(data[f"beta2_{i}"])
 
-        block.ffn.W1[...] = data[f"W1_{i}"]
-        block.ffn.b1[...] = data[f"b1_{i}"]
-        block.ffn.W2[...] = data[f"W2_{i}"]
-        block.ffn.b2[...] = data[f"b2_{i}"]
+        block.ffn.W1[...] = to_xp(data[f"W1_{i}"])
+        block.ffn.b1[...] = to_xp(data[f"b1_{i}"])
+        block.ffn.W2[...] = to_xp(data[f"W2_{i}"])
+        block.ffn.b2[...] = to_xp(data[f"b2_{i}"])
 
     return model, optimizer, tokenizer, scheduler
 
