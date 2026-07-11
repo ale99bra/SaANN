@@ -7,6 +7,57 @@ import sys
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="cupy")
 
+def safe_convert(obj):
+    import cupy as cp
+    import numpy as np
+    # Convert CuPy → NumPy
+    if isinstance(obj, cp.ndarray):
+        return cp.asnumpy(obj)
+
+    # Leave NumPy arrays untouched
+    if isinstance(obj, np.ndarray):
+        return obj
+
+    # Recursively convert lists
+    if isinstance(obj, list):
+        return [safe_convert(x) for x in obj]
+
+    # Recursively convert tuples
+    if isinstance(obj, tuple):
+        return tuple(safe_convert(x) for x in obj)
+
+    # Recursively convert dicts
+    if isinstance(obj, dict):
+        return {k: safe_convert(v) for k, v in obj.items()}
+
+    # DO NOT touch custom objects
+    return obj
+
+def cupy_to_numpy(obj):
+    if isinstance(obj, xp.ndarray):
+        return xp.asnumpy(obj)
+
+    elif isinstance(obj, list):
+        return [cupy_to_numpy(x) for x in obj]
+
+    elif isinstance(obj, tuple):
+        return tuple(cupy_to_numpy(x) for x in obj)
+
+    elif isinstance(obj, dict):
+        return {k: cupy_to_numpy(v) for k, v in obj.items()}
+
+    elif hasattr(obj, "__dict__"):
+        for k, v in obj.__dict__.items():
+            # Only convert if it's actually a CuPy array
+            if isinstance(v, xp.ndarray):
+                obj.__dict__[k] = xp.asnumpy(v)
+            else:
+                obj.__dict__[k] = cupy_to_numpy(v)
+        return obj
+
+    return obj
+
+
 def to_numpy(x):
     # CuPy arrays have .get()
     if hasattr(x, "get"):
