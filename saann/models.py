@@ -383,7 +383,7 @@ class SequentialModel:
         >>> model.fit(X_train, y_train, epochs, batch_size, graphical = False, real_time = False, log_plot = False)
         >>> y_pred = model.predict(X_test)
         """
-        y_pred = self.mlp.forward(X_test)
+        y_pred = self.mlp.forward(X_test, training=False)
         return y_pred
     
     def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 1e-4, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, batch_norm = False, dropout = False, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
@@ -782,7 +782,7 @@ class CNN:
                 
             self.biases = BE.xp.random.rand(self.num_filters) * 0
 
-        def forward(self, X):
+        def forward(self, X, training = True):
             batch_size, im_h, im_w, num_channels = X.shape
 
             if im_w <= im_h: min_size = im_w
@@ -797,7 +797,7 @@ class CNN:
                 padding = self.padding
             )
 
-            layer_conv = self.bn.forward(layer_conv, training=True)
+            layer_conv = self.bn.forward(layer_conv, training=training)
 
             if self.activation_function == "sigmoid":
                 self.layer_conv = AF.sigmoid(layer_conv)
@@ -925,17 +925,17 @@ class CNN:
             self.d_weights = BE.xp.zeros_like(self.weights)
             self.d_biases  = BE.xp.zeros_like(self.biases)
     
-    def ConvolutionBlock(self, X):
-        X = self.conv1a.forward(X)
-        X = self.conv1b.forward(X)
+    def ConvolutionBlock(self, X, training=True):
+        X = self.conv1a.forward(X, training=training)
+        X = self.conv1b.forward(X, training=training)
         X = self.conv1b.maxpool_forward(X, 2, 2)
 
-        X = self.conv2a.forward(X)
-        X = self.conv2b.forward(X)
+        X = self.conv2a.forward(X, training=training)
+        X = self.conv2b.forward(X, training=training)
         X = self.conv2b.maxpool_forward(X, 2, 2)
 
-        X = self.conv3a.forward(X)
-        X = self.conv3b.forward(X)
+        X = self.conv3a.forward(X, training=training)
+        X = self.conv3b.forward(X, training=training)
         X = self.conv3b.maxpool_forward(X, 2, 2)
 
         return X
@@ -1168,12 +1168,12 @@ class CNN:
         for i in range(0, num_samples, batch_size):
             X_batch = X_test[i:i+batch_size]
             batch_conv_outputs_flat = []
-            conv_out = self.ConvolutionBlock(X=X_batch)
+            conv_out = self.ConvolutionBlock(X=X_batch, training=False)
 
             B = conv_out.shape[0]
             batch_conv_outputs_flat = conv_out.reshape(B, -1)
 
-            y_pred = self.mlp.forward(batch_conv_outputs_flat)
+            y_pred = self.mlp.forward(batch_conv_outputs_flat, training=False)
             y_pred_final.append(y_pred)
 
         y_pred = BE.xp.concatenate(y_pred_final, axis=0)

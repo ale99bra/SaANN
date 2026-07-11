@@ -61,7 +61,7 @@ class DenseLayer:
         self.num_neurons = num_neurons
         self.activation = activation_function
 
-    def forward(self, inputs):
+    def forward(self, inputs, training=True):
         """
         Performs the forwards pass through the dense layer.\n
         Parameters
@@ -77,7 +77,7 @@ class DenseLayer:
 
         raw_output = self.weighted_sum + self.biases
         
-        raw_output = self.batchnorm.forward(raw_output)
+        raw_output = self.batchnorm.forward(raw_output, training=training)
 
         if self.activation == "sigmoid":
             self.output = AF.sigmoid(raw_output)
@@ -262,7 +262,7 @@ class MLP:
         for n_inputs, n_neurons, activation, initialization in layers_info:
             self.layers.append(DenseLayer(extras = self.extras, num_inputs=n_inputs, num_neurons=n_neurons, activation_function=activation.lower(), init_function=initialization.lower()))
 
-    def forward(self, inputs):
+    def forward(self, inputs, training = True):
         """
         Performs the forward propagation through each layer of the MLP\n
         Parameters
@@ -272,7 +272,7 @@ class MLP:
         curr_input = inputs #initialization
 
         for layer in self.layers: #iterate through each layer
-            curr_input = layer.forward(curr_input) #update the input
+            curr_input = layer.forward(curr_input, training=training) #update the input
         return curr_input
     
     def backward(self, d_loss_wrt_pred):
