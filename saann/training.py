@@ -5,6 +5,7 @@ from .transformer.transformer_model import TransformerModel
 from .tokenizer import ByteTokenizer
 from .gradients import AdamW
 import numpy as np
+import datetime
 
 def train_transformer_step(model, optimizer, tokens, targets):
 
@@ -94,13 +95,15 @@ def train_transformer(
         min_lr=1e-5
     )
 
-
+    t_in = datetime.datetime.now()
     for epoch in range(epochs):
         for tokens, targets in batches:
             scheduler.step()
             loss = train_transformer_step(model, optimizer, tokens, targets)
 
         if epoch == 0:
+            dt = (datetime.datetime.now() - t_in).total_seconds()
+            print(f"Time for first epoch: {dt} seconds. Estimated time: {int(dt*epochs/60)} minutes.")
             print(f"Initial loss: {loss:.4f}")
         elif epoch % log_interval == 0:
             print(f"{int((epoch/epochs)*100)}% - Loss: {loss:.4f} (LR={optimizer.lr:.6f})")
