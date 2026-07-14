@@ -31,11 +31,12 @@ SaANN/
         └── transformer_model.py                    # GPT-style Transformer model
 │
 └── examples/                                       # Examples
-    ├── automatic_diabetes_dataset_example.ipynb    # Example of automatic workflow
-    ├── diabetes_dataset_example.ipynb              # Example of manual workflow
-    ├── XOR_example.ipynb                           # Example of manual workflow
+    ├── automatic_diabetes_dataset_example.ipynb    # Example of MLP automatic workflow
+    ├── diabetes_dataset_example.ipynb              # Example of MLP manual workflow
+    ├── XOR_example.ipynb                           # Example of MLP manual workflow
     ├── flower_cnn_example.ipynb                    # CNN training and evaluation - flowers
-    └── EO_cnn_example.ipynb                        # CNN training and evaluation - satellite images
+    ├── EO_cnn_example.ipynb                        # CNN training and evaluation - satellite images
+    └── transformer_dummy_example.ipynb             # Example of Transformer API
 │
 └── .github/workflows
     └── tests.yml                                   # GitHub Actions test workflow
@@ -59,8 +60,10 @@ SaANN/
 
 SaANN implements:
 
-- **Multi-Layer Perceptron (MLP)**: Forward/backpropagation, batch gradient descent
+- **Multi-Layer Perceptron (MLP)**: Forward/backpropagation, batch gradient descent, experimental Cross-Training
 - **Convolutional Neural Network (CNN)**: Conv2D → MaxPool → BatchNorm2D → MLP head
+- **Recurrent Neural Network (RNN)**: Vanilla, GRU, LSTM
+- **Transformer**
 - **Training**: Configurable optimizers, learning rates, regularization
 - **Backend**: Transparent NumPy/CuPy switching
 
