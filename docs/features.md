@@ -119,20 +119,19 @@ and supports all standard SaANN features (batch training, GPU/CPU backend, weigh
 Traditional MLP training follows a single optimization trajectory.
 Cross‑Training instead maintains two synchronized learners, each performing:
 
-- Independent forward/backward pass
-- Weight‑swapping pass (during the cross‑training phase)
-- Final update (with or without weight decay)
+- **Phase A**: Independent forward/backward pass
+- **Phase B**: Weight‑swapping pass (during the cross‑training phase)
+- **Phase C**: Final update (with or without weight decay)
 
 This creates a dynamic where each model periodically inherits the other's representation, forcing both to generalize rather than overfit to local minima.
 
 ### ⚙️ How Cross‑Training Works
 
 1. **Two MLPs are constructed** — both networks share the same architecture, initialization, and optimizer.
-2. **Training is split into two phases**:
-    - **Phase A — Cross‑Training Phase**
+2. **Training is split into two stages**:
+    - **Stage I — Cross‑Training Phase** (Phase A - Phase B - Phase C)
 
-        Runs for: $$ {epochs}_{cross} = epoch \times (1−ftr) $$
-        where `ftr` is the *fine tuning ratio*.
+        Runs for: the first `(1 - ftr)` percentage of epochs, where `ftr` is the *fine tuning ratio*.
 
         During this phase:
         - Weight decay is disabled (wd = 0)
@@ -144,9 +143,9 @@ This creates a dynamic where each model periodically inherits the other's repres
 
         This phase encourages exploration and prevents premature convergence.
 
-    - **Phase B — Fine‑Tuning Phase**
+    - **Stage II — Fine‑Tuning Phase** (Phase A - Phase C)
 
-        Runs for: $$ {epochs}_{fine} = epoch \times ftr $$
+        Runs for the remaining epochs
 
         During this phase:
         - Weight decay is enabled (if provided)

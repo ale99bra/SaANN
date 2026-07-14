@@ -51,7 +51,7 @@ SaANN/
 └── docs/
     ├── api-reference.md                            # API documentation
     ├── architecture.md                             # This file
-    ├── features.md                                 # Examples of SaANN usage
+    ├── features.md                                 # Rundown of the models
     ├── installation.md                             # Installation guide
     └── quickstart.md                               # Get started guide
 ```
