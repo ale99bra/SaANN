@@ -245,7 +245,7 @@ generated = generate_top_p(
     rep_penalty=1.2
 )
 
-decoded_output = tokenizer.decode(generated)
+decoded_output = tokenizer.decode(generated[0].tolist())
 print(f"Decoded output: {decoded_output}")
 ```
 

@@ -1,4 +1,6 @@
-# saann/transformer/blocks.py
+# blocks.py
+# Copyright (c) 2026 Alessio Branda
+# Licensed under the MIT License
 
 from .. import backend as BE
 from .attention import MultiHeadAttention

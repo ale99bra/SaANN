@@ -1,3 +1,7 @@
+# embeddings.py
+# Copyright (c) 2026 Alessio Branda
+# Licensed under the MIT License
+
 from .. import backend as BE
 
 class PositionalEmbedding:
