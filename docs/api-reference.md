@@ -265,7 +265,7 @@ Load the model saved using the `model.save_model(path)` method. It automatically
 - Returns: Model (class)
 
 ## Transformer API
-The training of the TransformerModel operates on multiple layers of the architecture. For that reason, it was preferred to provide the API needed for training as in the example found in [Quick Start](docs/quickstart.md#transformermodel-example).
+The training of the TransformerModel operates on multiple layers of the architecture. For that reason, it was preferred to provide the API needed for training as in the example found in [Quick Start](/quickstart.md#transformermodel-example).
 
 ### Tokenizer
 
