@@ -7,6 +7,9 @@ from .gradients import AdamW
 import numpy as np
 import datetime
 
+VERSION = "0.3.0"
+LIST_VERSIONS_COMPATIBLE = [VERSION]
+
 def train_transformer_step(model, optimizer, tokens, targets):
 
     #forward pass
@@ -65,7 +68,78 @@ class LRScheduler:
         # Update optimizer LR
         self.optimizer.lr = float(lr)
         return lr
+    
+def create_optimizer(model):
+    """
+    Creates the opmitizer for training the model.
 
+    Parameters
+    ----------
+    :param model: (class) - Model created for the training
+
+    Returns
+    -------
+    :param optimizer: (class) - Optimizer class
+    """
+
+    """if type(model) != type(TransformerModel):
+        raise ValueError(f"Model passed is not recognized. Type:", type(model))"""
+
+    params = {}
+
+    # Token embedding
+    params["W_tok"] = model.token_emb.W
+    params["dW_tok"] = model.token_emb.d_W
+
+    # Positional embedding
+    params["W_pos"] = model.pos_emb.W
+    params["dW_pos"] = model.pos_emb.d_W
+
+    # Final projection
+    params["W_out"] = model.W_out
+    params["dW_out"] = model.d_W_out
+    params["b_out"] = model.b_out
+    params["db_out"] = model.d_b_out
+
+    # Blocks
+    for i, block in enumerate(model.blocks):
+        # Attention
+        params[f"W_q_{i}"] = block.attn.W_q
+        params[f"dW_q_{i}"] = block.attn.d_W_q
+        params[f"W_k_{i}"] = block.attn.W_k
+        params[f"dW_k_{i}"] = block.attn.d_W_k
+        params[f"W_v_{i}"] = block.attn.W_v
+        params[f"dW_v_{i}"] = block.attn.d_W_v
+        params[f"W_o_{i}"] = block.attn.W_o
+        params[f"dW_o_{i}"] = block.attn.d_W_o
+
+        # LayerNorm 1
+        params[f"gamma1_{i}"] = block.ln1.gamma
+        params[f"dgamma1_{i}"] = block.ln1.d_gamma
+        params[f"beta1_{i}"] = block.ln1.beta
+        params[f"dbeta1_{i}"] = block.ln1.d_beta
+
+        # LayerNorm 2
+        params[f"gamma2_{i}"] = block.ln2.gamma
+        params[f"dgamma2_{i}"] = block.ln2.d_gamma
+        params[f"beta2_{i}"] = block.ln2.beta
+        params[f"dbeta2_{i}"] = block.ln2.d_beta
+
+        # FFN
+        params[f"W1_{i}"] = block.ffn.W1
+        params[f"dW1_{i}"] = block.ffn.d_W1
+        params[f"b1_{i}"] = block.ffn.b1
+        params[f"db1_{i}"] = block.ffn.d_b1
+
+        params[f"W2_{i}"] = block.ffn.W2
+        params[f"dW2_{i}"] = block.ffn.d_W2
+        params[f"b2_{i}"] = block.ffn.b2
+        params[f"db2_{i}"] = block.ffn.d_b2
+
+    # Create optimizer
+    optimizer = AdamW(params, learning_rate=1e-4, wd=0.1)
+
+    return optimizer
 
 def train_transformer(
     model,
@@ -73,11 +147,14 @@ def train_transformer(
     data,
     batch_size,
     seq_len,
-    epochs=1000,
-    checkpoint_every=50,
+    epochs=100,
+    checkpoint_every=20,
     checkpoint_dir="checkpoints",
     tokenizer=None
 ):
+    
+    if len(data) < seq_len:
+        raise ValueError(f"Not enough data point. Dataset length: {len(data)} - seq_len:{seq_len}.")
 
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -218,13 +295,27 @@ def save_model(model, optimizer, tokenizer, scheduler, path="checkpoint.npz"):
     arrays["tokenizer_stoi"] = tokenizer.stoi
     arrays["tokenizer_itos"] = tokenizer.itos
 
+    arrays["version"] = VERSION
+
     BE.xp.savez(path, **arrays)
 
 
 def load_model(path):
     data = BE.xp.load(path, allow_pickle=True)
 
-    data = BE.to_numpy(data)
+    try:
+        print(f'Loading model of version: {data["version"]}')
+        load_version = data["version"]
+    except:
+        print(f"Old model. Imprinting version: {VERSION}. Might cause failure.")
+        load_version = VERSION
+
+    if load_version not in LIST_VERSIONS_COMPATIBLE:
+        raise ValueError(f"Trying to load a model with an incorrect version: VERSION {load_version} | Supported versions: {LIST_VERSIONS_COMPATIBLE}")
+
+    try:
+        data = BE.to_numpy(data) # If trained on GPU
+    except: pass
 
     data = np.load(path, allow_pickle=True)
 
