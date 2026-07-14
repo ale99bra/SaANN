@@ -66,7 +66,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests. R
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](/LICENCE) file for details.
 
 ## Author
 
@@ -76,6 +76,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 
-1. Check the `examples/` directory for usage patterns
+1. Check the [examples/](examples/) directory for usage patterns
 2. Review the [documentation](docs/)
 3. Open an issue on GitHub with a detailed description
