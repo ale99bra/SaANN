@@ -69,7 +69,7 @@ class LRScheduler:
         self.optimizer.lr = float(lr)
         return lr
     
-def create_optimizer(model):
+def create_optimizer(model, learning_rate=1e-4, wd=0.1):
     """
     Creates the opmitizer for training the model.
 
@@ -81,63 +81,14 @@ def create_optimizer(model):
     -------
     :param optimizer: (class) - Optimizer class
     """
-
-    """if type(model) != type(TransformerModel):
-        raise ValueError(f"Model passed is not recognized. Type:", type(model))"""
-
-    params = {}
-
-    # Token embedding
-    params["W_tok"] = model.token_emb.W
-    params["dW_tok"] = model.token_emb.d_W
-
-    # Positional embedding
-    params["W_pos"] = model.pos_emb.W
-    params["dW_pos"] = model.pos_emb.d_W
-
-    # Final projection
-    params["W_out"] = model.W_out
-    params["dW_out"] = model.d_W_out
-    params["b_out"] = model.b_out
-    params["db_out"] = model.d_b_out
-
-    # Blocks
-    for i, block in enumerate(model.blocks):
-        # Attention
-        params[f"W_q_{i}"] = block.attn.W_q
-        params[f"dW_q_{i}"] = block.attn.d_W_q
-        params[f"W_k_{i}"] = block.attn.W_k
-        params[f"dW_k_{i}"] = block.attn.d_W_k
-        params[f"W_v_{i}"] = block.attn.W_v
-        params[f"dW_v_{i}"] = block.attn.d_W_v
-        params[f"W_o_{i}"] = block.attn.W_o
-        params[f"dW_o_{i}"] = block.attn.d_W_o
-
-        # LayerNorm 1
-        params[f"gamma1_{i}"] = block.ln1.gamma
-        params[f"dgamma1_{i}"] = block.ln1.d_gamma
-        params[f"beta1_{i}"] = block.ln1.beta
-        params[f"dbeta1_{i}"] = block.ln1.d_beta
-
-        # LayerNorm 2
-        params[f"gamma2_{i}"] = block.ln2.gamma
-        params[f"dgamma2_{i}"] = block.ln2.d_gamma
-        params[f"beta2_{i}"] = block.ln2.beta
-        params[f"dbeta2_{i}"] = block.ln2.d_beta
-
-        # FFN
-        params[f"W1_{i}"] = block.ffn.W1
-        params[f"dW1_{i}"] = block.ffn.d_W1
-        params[f"b1_{i}"] = block.ffn.b1
-        params[f"db1_{i}"] = block.ffn.d_b1
-
-        params[f"W2_{i}"] = block.ffn.W2
-        params[f"dW2_{i}"] = block.ffn.d_W2
-        params[f"b2_{i}"] = block.ffn.b2
-        params[f"db2_{i}"] = block.ffn.d_b2
+    try:    
+        # Gather parameters
+        params = model.get_params()
+    except Exception as e:
+        raise Exception("Couldn't get parameters from the model:", e)
 
     # Create optimizer
-    optimizer = AdamW(params, learning_rate=1e-4, wd=0.1)
+    optimizer = AdamW(params, learning_rate=learning_rate, wd=wd)
 
     return optimizer
 
@@ -168,8 +119,8 @@ def train_transformer(
         optimizer=optimizer,
         warmup_steps=int(0.05*tot_steps),
         total_steps=tot_steps,
-        max_lr=1e-4,
-        min_lr=1e-5
+        max_lr=optimizer.lr,
+        min_lr=optimizer.lr/10
     )
 
     t_in = datetime.datetime.now()
