@@ -205,6 +205,8 @@ Save the model's architecture and weights in a pickle file
 
 Experimental class implementing dual‑network training with weight‑swapping regularization.
 
+#### Methods
+
 **`__init__(gpu=False)`**
 
 Initializes the Cross‑Training model.
@@ -261,6 +263,95 @@ Load the model saved using the `model.save_model(path)` method. It automatically
 
 - `path` (str): File path of model's pickle
 - Returns: Model (class)
+
+## Transformer API
+The training of the TransformerModel operates on multiple layers of the architecture. For that reason, it was preferred to provide the API needed for training as in the example found in [Quick Start](quickstart#transformermodel-example.md).
+
+### Tokenizer
+
+For the **tokenizer**, one can use two methods.
+From `saann.tokenizer`:
+
+**`ByteTokenizer()`**
+- 256‑token vocabulary
+- Returns: tokenizer
+
+**`CharTokenizer(text)`**
+- `text` (array): Input (text) array
+- ASCII/UTF‑8 character vocabulary
+- Returns: tokenizer
+
+Both provide:
+
+- **`encode(text)`**
+    - returns the list of token IDs
+- **`decode(tokens)`**
+    - returns the string after reconstruction
+
+To initialize the model, from `saann.transformer.transformer_model`:
+
+### TransformerModel
+Class for the transformer model
+
+**`__init__(self, vocab_size, embed_dim, num_heads, ff_hidden_dim, num_layers, max_seq_len, learned_positional)__`**
+
+Initialize the model
+- `vocab_size` (int): Size of the tokenizer vocabolary
+- `embed_dim` (int): Dimensions of the embeddings
+- `num_heads` (int): Number of heads
+- `ff_hidden_dim` (int): Number of hidden dimension of the Feed-Forward
+- `num_layers` (int): Number of layers
+- `max_seq_len` (int): Maximum value for the sequence length
+- `learned_positional` (bool): tag tokens with unique positions in a sequence
+
+### Training
+
+To train the model, from `saann.training`:
+
+**`create_optimizer(model, learning_rate, wd)`**
+
+Creates the optimizer for the training
+- `model` (class): Model class
+- `learning_rate` (float): Maximum learning rate for the scheduler. Default is `1e-4`
+- `wd` (float): Weight decay factor. Default is `0.1`
+- Returns: optimizer class
+
+**`train_transformer(model, optimizer, data, batch_size, seq_len, epochs, checkpoint_every, checkpoint_dir, tokenizer)`**
+
+Operates the pipeline for training the TransformerModel
+- `model` (class): Model class
+- `optimizer` (class):
+- `data` (array): Encoded input array
+- `batch_size` (int): Size of batch for training
+- `seq_len` (int): Sequence length
+- `epochs` (int): Number of epochs
+- `checkpoint_every` (int): Number of epochs needed to save each checkpoint
+- `checkpoint_dir` (str): File path for the checkpoint directory. Default is "checkpoints". Saves fully trained model as "checkpoint_final.npz"
+- `tokenizer` (class): Tokenizer class
+
+#### Load Models
+
+**`load_model(path)`**
+
+Load the model saved during the training.
+
+- `path` (str): File path of the model
+- Returns: Model (class)
+
+### Generation
+
+To generate the output, from `saann.generate`:
+
+**`generate_top_p(model, start_tokens, max_new_tokens, p, temperature, rep_penalty)`**
+
+Generate tokens using the trained model
+- `model` (class): Trained model class
+- `start_tokens` (array): Array of encoded token to initialize the generation
+- `max_new_tokens` (int): Number of tokens to generate
+- `p` (float): Nucleus sampling threshold
+- `temperature` (float): Temperature parameter
+- `rep_penalty` (float): Repetition penalty
+- Returns: encoded tokens
 
 ## Metrics
 
