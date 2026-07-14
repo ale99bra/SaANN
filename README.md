@@ -17,11 +17,12 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 
 Full documentation lives in [`docs/`](docs/):
 
-- [Features](docs/features.md) — Core architecture, MLP, CNN, RNN, Transformer, Cross-Training, metrics
 - [Installation](docs/installation.md) — Setup, requirements, optional GPU (CuPy) support
 - [Quick Start](docs/quickstart.md) — Copy‑paste examples for every model type
 - [API Reference](docs/api-reference.md) — Full method-by-method documentation
 - [Architecture](docs/architecture.md) — Project structure and design overview
+- [Features](docs/features.md) — Core architecture, MLP, CNN, RNN, Transformer, Cross-Training, metrics
+
 
 ## Installation
 

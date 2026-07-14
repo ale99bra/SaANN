@@ -207,7 +207,7 @@ Experimental class implementing dual‑network training with weight‑swapping r
 
 #### Methods
 
-**`__init__(gpu=False)`**
+**`__init__(gpu)`**
 
 Initializes the Cross‑Training model.
 - `gpu` (bool): Enable GPU acceleration (CuPy). Falls back to CPU automatically.
@@ -238,7 +238,7 @@ Trains the two MLPs using the Cross‑Training strategy.
 - `parallelize` (bool): Parallel forward/backward passes (CPU only). Default is `False`
 - Returns: Final predictions on training data (array)
 
-**`predict(X_test)`**
+**`predict(X)`**
 
 Returns predictions using the best-performing model.
 
@@ -265,7 +265,7 @@ Load the model saved using the `model.save_model(path)` method. It automatically
 - Returns: Model (class)
 
 ## Transformer API
-The training of the TransformerModel operates on multiple layers of the architecture. For that reason, it was preferred to provide the API needed for training as in the example found in [Quick Start](quickstart#transformermodel-example.md).
+The training of the TransformerModel operates on multiple layers of the architecture. For that reason, it was preferred to provide the API needed for training as in the example found in [Quick Start](/quickstart#transformermodel-example.md).
 
 ### Tokenizer
 
