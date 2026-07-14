@@ -22,6 +22,19 @@ class TransformerModel:
     """
 
     def __init__(self, vocab_size, embed_dim, num_heads, ff_hidden_dim, num_layers, max_seq_len, learned_positional):
+        """
+        Initialize the TransformerModel
+
+        Parameters
+        ----------
+        :param vocab_size: *int* - Size of the tokenizer vocabolary
+        :param embed_dim: *int* - Dimensions of the embeddings
+        :num_heads: *int* - Number of heads
+        :ff_hidden_dim: *int* - Number of hidden dimension of the Feed-Forward
+        :num_layers: *int* - Number of layers
+        :max_seq_len: *int* - Maximum value for the sequence length
+        :learned_positional: *bool* - tag tokens with unique positions in a sequence
+        """
         self.vocab_size = vocab_size
         self.embed_dim = embed_dim
         self.num_heads = num_heads
