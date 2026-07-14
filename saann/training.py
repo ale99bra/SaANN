@@ -71,7 +71,7 @@ class LRScheduler:
     
 def create_optimizer(model, learning_rate=1e-4, wd=0.1):
     """
-    Creates the opmitizer for training the model.
+    Creates the optimizer for training the model.
 
     Parameters
     ----------
