@@ -14,8 +14,8 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.2.6"
-LIST_VERSIONS_COMPATIBLE = [VERSION]
+VERSION = "0.3.0"
+LIST_VERSIONS_COMPATIBLE = ["0.2.7", VERSION]
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -122,6 +122,17 @@ def load_Recurrent_model(path, flag_gpu):
         raise ValueError("Couldn't load Sequential model:", e)
 
 def load_model(path):
+    """
+    Load SaANN model
+
+    Parameters
+    ----------
+    :param path: *str* - File path to model
+
+    Returns
+    -------
+    :param model: *class* - Model class
+    """
     try:
         with open(path, "rb") as f:
             model = pickle.load(f)
@@ -225,7 +236,7 @@ class SequentialModel:
         if layers_info[-1][2].lower() == "softmax":
             print("The last layer of the MLP has 'softmax' activation. The model will use 'cross-entropy' as the loss function.")
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 1e-4, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0, loss_function = 'mse', graphical = False, real_time = False, log_plot = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
@@ -386,7 +397,7 @@ class SequentialModel:
         y_pred = self.mlp.forward(X_test, training=False)
         return y_pred
     
-    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 1e-4, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, batch_norm = False, dropout = False, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
+    def automatic(self, X, y, layers_info, learning_rate = 0.01, epochs = 100, batch_size = 1, wd = 0, loss_function = 'mse', split_test_percentage = 0.3, scaling = None, batch_norm = False, dropout = False, graphical = False, real_time = False, log_plot = False, test_loss = False, scatter_comparison = False):
         """
         Performs the *construction*, *fitting* and *prediction* based on the parameters given.\n
         Parameters
@@ -506,6 +517,13 @@ class SequentialModel:
             layer.biases = saved["b"]
     
     def save_model(self, path = "model.pickle"):
+        """
+        Save the model's architecture and weights in a pickle file
+        
+        Parameters
+        ----------
+        :params path: *str* - File path for output
+        """
         self.batch_size = getattr(self, "batch_size", 16)
         try:
             weights = self.save_weights(path=None)
@@ -535,7 +553,7 @@ class SequentialModel:
             self.batch_size = batch_size
             
             if self.flag_gpu != flag_gpu and self.flag_gpu == False:
-                raise ValueError("Model loaded was trained on GPU, but the GPU is currently not available. In future version it'll be compatible!")
+                raise ValueError("Model loaded was trained on GPU, but the GPU is currently not available.")
 
             self.construct(layers_info=layers_info)
             self.load_weights(weights=weights)
@@ -963,7 +981,7 @@ class CNN:
         self.conv1a.update(self.learning_rate, self.wd)
 
 
-    def fit(self, X_train, y_train, epochs, batch_size, wd = 1e-4, graphical = False, real_time = False, log_plot = False, report = False):
+    def fit(self, X_train, y_train, epochs, batch_size, wd = 0, graphical = False, real_time = False, log_plot = False, report = False):
         """
         Performs the train loop for each epoch.\n
         Parameters
@@ -1392,6 +1410,13 @@ class CNN:
             layer.biases = saved["b"]
 
     def save_model(self, path = "model_CNN.pickle"):
+        """
+        Save the model's architecture and weights in a pickle file
+        
+        Parameters
+        ----------
+        :params path: *str* - File path for output
+        """
         self.batch_size = getattr(self, "batch_size", 16)
         self.num_channels = getattr(self, "num_channels", 3)
         try:
@@ -1822,6 +1847,13 @@ class RecurrentModel:
 
     
     def save_model(self, path = "RNN_model.pickle"):
+        """
+        Save the model's architecture and weights in a pickle file
+        
+        Parameters
+        ----------
+        :params path: *str* - File path for output
+        """
         self.batch_size = getattr(self, "batch_size", 16)
         try:
             weights = self.save_weights(path=None)
@@ -1861,3 +1893,353 @@ class RecurrentModel:
             print("Recurrent model loaded")
         except ImportError as e:
             raise ValueError(e)
+
+class CrossTrainingSequentialModel:
+    """
+    Cross-Training version of SequentialModel.
+    Two MLPs are trained in parallel with weight-swapping regularization.
+    """
+
+    def __init__(self, gpu=False):
+        self.model1 = None
+        self.model2 = None
+        self.optimizer1 = None
+        self.optimizer2 = None
+        self.learning_rate = None
+
+        if gpu:
+            if BE.gpu_available:
+                print("Computing on GPU")
+                self.flag_gpu = True
+            else:
+                print("GPU not available. Computing on CPU")
+                self.flag_gpu = False
+                BE.use_cpu()
+        else:
+            print("Computing on CPU")
+            self.flag_gpu = False
+            BE.use_cpu()
+
+    def construct(self, layers_info, learning_rate=0.01, batch_norm=False, dropout=False):
+        """
+        Constructs the Dense Layers of the two MLPs while initializing the SGD optimizer.\n
+        Parameters
+        ----------
+        :param layer_info: *list* - Information regarding how to construct the dense layers. Needs to be in the format of a list:\n[(#inputs, #neurons, 'activation function', 'initiation function'), ...].\n
+        :param learning_rate: *float* - Hyperparameter that controls the step size.\n
+        :param batch_norm: *bool* - Allows batch normalization.
+        :param droput: *bool* - Allows dropout
+
+        Example
+        -------
+            >>> model = CrossTrainingSequentialModel()
+        >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
+        >>> model.construct(ly_info, learning_rate=0.2)
+        """
+
+        self.layers_info = layers_info
+        self.learning_rate = learning_rate
+
+        self.model1 = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
+        self.model2 = MLP(layers_info, batch_norm=batch_norm, dropout=dropout)
+
+        self.optimizer1 = SGD(learning_rate)
+        self.optimizer2 = SGD(learning_rate)
+
+        if layers_info[-1][2].lower() == "softmax":
+            print("The last layer has 'softmax'. Using 'cross-entropy' loss.")
+
+    def fit(self, X_train, y_train, epochs, batch_size,
+            wd=0, loss_function='mse', fine_tuning_ratio = 0.5,
+            graphical=False, real_time=False, log_plot=False, parallelize = False):
+        """
+        Performs the train loop for each epoch.\n
+        Parameters
+        ----------
+        :params X_train: *array* - X split for the training\n
+        :params y_train: *array* - y split for the training\n
+        :params epochs: *int* - Number of epochs\n
+        :params batch_size: *int* - Size of each batch\n
+        :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
+        :params loss_function: *str* - Loss function to utilize during training ('mse', 'mae', 'cross-entropy', or 'huber' (or 'huber:delta' where delta is the hyperparameter. e.g. 'huber:1.3'))\n
+            N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
+        :params graphical: *bool* - Display the Loss graph at the end of the fitting\n
+        :params real_time: *bool* - Display the Loss graph in real time\n
+        :params log_plot: *bool* - Display the Loss graph in semilogy scale\n
+        :params parallelize: *bool* - Enables parallel threads calculation (CPU)
+
+        Returns
+        -------
+        :return final_pred_train: *array* - Final prediction during training
+
+        Example
+        -------
+            >>> model = CrossTrainingSequentialModel()
+        >>> ly_info = [(X.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
+        >>> model.construct(ly_info, learning_rate=0.2)
+        >>> final_pred = model.fit(X_train, y_train, epochs, batch_size, graphical = False, real_time = False, log_plot = False)
+        """
+
+        num_samples = X_train.shape[0]
+        num_batches = (num_samples + batch_size - 1) // batch_size
+
+        try:
+            tmp = loss_function.split(sep=':')
+            self.delta = float(tmp[1])
+            loss_function = tmp[0]
+        except:
+            self.delta = 1
+
+        if self.model1.layers[-1].activation == "softmax":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+        elif loss_function.lower() == "mse":
+            self.loss_func = losses.MSE
+            self.loss_gradient = losses.MSE_der
+        elif loss_function.lower() == "mae":
+            self.loss_func = losses.MAE
+            self.loss_gradient = losses.MAE_der
+        elif loss_function.lower() == "huber":
+            self.loss_func = losses.Huber
+            self.loss_gradient = losses.Huber_der
+        elif loss_function.lower() == "cross-entropy":
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+        else:
+            raise ValueError(f"Loss function '{loss_function}' not found.")
+
+        # Graphical setup
+        if real_time and not graphical:
+            warnings.warn("real_time=True but graphical=False. Enabling graphical.")
+            graphical = True
+
+        if graphical:
+            loss_list = []
+        if real_time:
+            plt.figure()
+            plt.ion()
+
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=2)
+
+        print(f"Cross-Training for {epochs} Epochs with LR={self.learning_rate:.2g}")
+
+        for epoch in range(epochs):
+            thr_epoch = int(epochs - int(epochs*fine_tuning_ratio))
+            idx = BE.xp.random.permutation(num_samples)
+            X_shuffled = X_train[idx]
+            y_shuffled = y_train[idx]
+
+            tot_loss = 0
+            tot_loss1 = 0
+            tot_loss2 = 0
+
+            for i in range(0, num_samples, batch_size):
+
+                X_batch = X_shuffled[i:i+batch_size]
+                y_batch = y_shuffled[i:i+batch_size]
+
+                if self.flag_gpu or parallelize == False:
+                    wd_tmp = wd
+
+                    # Phase A — Independent pass
+                    y1 = self.model1.forward(X_batch)
+                    y2 = self.model2.forward(X_batch)
+
+                    loss1 = self.loss_func(y_true=y_batch, y_pred=y1)
+                    loss2 = self.loss_func(y_true=y_batch, y_pred=y2)
+
+                    tot_loss += BE.xp.mean(loss1 + loss2) * 0.5
+
+                    tot_loss1 += BE.xp.mean(loss1)
+                    tot_loss2 += BE.xp.mean(loss1)
+
+                    d1 = self.loss_gradient(y_true=y_batch, y_pred=y1)
+                    d2 = self.loss_gradient(y_true=y_batch, y_pred=y2)
+
+                    self.model1.backward(d1)
+                    self.model2.backward(d2)
+
+                    if epoch < thr_epoch:
+                        wd_tmp = 0
+
+                        # Save weights
+                        tmp_w1 = [layer.weights.copy() for layer in self.model1.layers]
+                        tmp_w2 = [layer.weights.copy() for layer in self.model2.layers]
+
+                        # Phase B — Cross-training
+                        for l, (layer1, layer2) in enumerate(zip(self.model1.layers, self.model2.layers)):
+                            layer1.weights = tmp_w2[l]
+                            layer2.weights = tmp_w1[l]
+
+                        # Second forward/backward
+                        y1_cross = self.model1.forward(X_batch)
+                        y2_cross = self.model2.forward(X_batch)
+
+                        d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross)
+                        d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross)
+
+                        self.model1.backward(d1_cross)
+                        self.model2.backward(d2_cross)
+
+                    # Phase C — Final update
+                    for layer in self.model1.layers:
+                        self.optimizer1.update(layer, wd=wd_tmp)
+
+                    for layer in self.model2.layers:
+                        self.optimizer2.update(layer, wd=wd_tmp)
+                else:
+                    wd_tmp = wd
+                    # Phase A - Independed pass
+                    def forward_backward(model, Xb, yb):
+                        y = model.forward(Xb)
+                        loss = self.loss_func(y_true=yb, y_pred=y)
+                        d = self.loss_gradient(y_true=yb, y_pred=y)
+                        model.backward(d)
+                        return loss, [layer.weights.copy() for layer in model.layers]
+
+                    f1 = executor.submit(forward_backward, self.model1, X_batch, y_batch)
+                    f2 = executor.submit(forward_backward, self.model2, X_batch, y_batch)
+
+                    loss1, tmp_w1 = f1.result()
+                    loss2, tmp_w2 = f2.result()
+
+                    tot_loss += BE.xp.mean(loss1 + loss2) * 0.5
+                    tot_loss1 += BE.xp.mean(loss1)
+                    tot_loss2 += BE.xp.mean(loss1)
+
+                    if epoch < thr_epoch:
+                        wd_tmp = 0
+                        # Phase B — Cross-training (sync + parallel)
+                        for l, (layer1, layer2) in enumerate(zip(self.model1.layers, self.model2.layers)):
+                            layer1.weights = tmp_w2[l]
+                            layer2.weights = tmp_w1[l]
+
+                        def forward_backward_cross(model, Xb, yb):
+                            y = model.forward(Xb)
+                            d = self.loss_gradient(y_true=yb, y_pred=y)
+                            model.backward(d)
+                            return None
+
+                        fc1 = executor.submit(forward_backward_cross, self.model1, X_batch, y_batch)
+                        fc2 = executor.submit(forward_backward_cross, self.model2, X_batch, y_batch)
+
+                        fc1.result()
+                        fc2.result()
+
+                    # Phase C — Final update (parallel)
+                    def update_model(model, optimizer):
+                        for layer in model.layers:
+                            optimizer.update(layer, wd=wd_tmp)
+
+                    u1 = executor.submit(update_model, self.model1, self.optimizer1)
+                    u2 = executor.submit(update_model, self.model2, self.optimizer2)
+
+                    u1.result()
+                    u2.result()
+
+            avg_loss = tot_loss / num_batches
+
+            if (epoch + 1) % (epochs // 10 if epochs >= 10 else 1) == 0 or epoch == 0:
+                print(f"Epoch {epoch+1}/{epochs}, Average loss: {avg_loss:.5f}")
+
+            if graphical:
+                loss_list.append(avg_loss)
+
+            if real_time:
+                plt.clf()
+                if log_plot:
+                    plt.semilogy(BE.to_numpy(BE.xp.arange(1, epoch+2)), BE.to_numpy(BE.xp.array(loss_list)))
+                else:
+                    plt.plot(BE.to_numpy(BE.xp.arange(1, epoch+2)), BE.to_numpy(BE.xp.array(loss_list)))
+                plt.title(f"Cross-Training Loss (epoch {epoch})")
+                plt.pause(5e-3)
+
+        if tot_loss1 <= tot_loss2:
+            self.final_pred = self.model1.forward(X_train)
+            self.best_model = self.model1
+        else:
+            self.final_pred = self.model2.forward(X_train)
+            self.best_model = self.model2
+
+        self.final_loss = self.loss_func(y_true=y_train, y_pred=self.final_pred)
+
+        print(f"\nFinal loss on training data: {BE.xp.mean(self.final_loss):.5f}")
+
+        if graphical:
+            plt.clf()
+            if real_time:
+                plt.ioff()
+            if log_plot:
+                plt.semilogy(BE.to_numpy(BE.xp.arange(1, epochs+1)), BE.to_numpy(BE.xp.array(loss_list)))
+            else:
+                plt.plot(BE.to_numpy(BE.xp.arange(1, epochs+1)), BE.to_numpy(BE.xp.array(loss_list)))
+            plt.title("Cross-Training Loss")
+            plt.show()
+
+        return BE.to_numpy(self.final_pred)
+
+    def predict(self, X_test):
+        """
+        Make predictions using the testing features.\n
+        Parameter
+        ---------
+        :param X_test: *array* - Data array used for the testing of the model.
+
+        Return
+        ------
+        :return y_pred: *array* - Prediction array
+
+        Example
+        -------
+            >>> model = CrossTrainingSequentialModel()
+        >>> ly_info = [(X_train.shape[1], 10, "relu", "he"), (10, 1, 'linear', 'he')]
+        >>> model.construct(ly_info, learning_rate=0.2)
+        >>> model.fit(X_train, y_train, epochs, batch_size, graphical = False, real_time = False, log_plot = False)
+        >>> y_pred = model.predict(X_test)
+        """
+        
+        y = self.best_model.forward(X_test, training=False)
+
+        return y
+    
+    def save_weights(self, path):
+        weights = {
+            "mlp": [
+                {
+                    "W": layer.weights,
+                    "b": layer.biases,
+                }
+                for layer in self.best_model.layers
+            ]
+        }
+        if path == None:
+            return weights
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(weights, f)
+    
+    def save_model(self, path = "model.pickle"):
+        """
+        Save the model's architecture and weights in a pickle file
+
+        Parameters
+        ----------
+        :params path: *str* - File path for output
+        """
+        self.batch_size = getattr(self, "batch_size", 16)
+        try:
+            weights = self.save_weights(path=None)
+            model_architecture = {
+                "version" : VERSION,
+                "gpu": self.flag_gpu,
+                "model" : "SequentialModel",
+                "weights" : weights,
+                "layers_info" : self.layers_info,
+                "batch_size" : self.batch_size,
+            }
+            with open(path, "wb") as f:
+                pickle.dump(model_architecture, f)
+            print(f"Model saved: {path}")
+        except ImportError as e:
+            raise ValueError(f"{e}")
