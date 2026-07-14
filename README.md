@@ -15,7 +15,7 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 
 ## Documentation
 
-Full documentation lives in [`docs/`](docs/README.md):
+Full documentation lives in [`docs/`](docs/):
 
 - [Features](docs/features.md) — Core architecture, MLP, CNN, RNN, Transformer, Cross-Training, metrics
 - [Installation](docs/installation.md) — Setup, requirements, optional GPU (CuPy) support
@@ -66,7 +66,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests. R
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
@@ -77,5 +77,5 @@ This project is licensed under the MIT License - see the [LICENSE](/LICENSE) fil
 If you encounter any issues or have questions:
 
 1. Check the `examples/` directory for usage patterns
-2. Review the [documentation](docs/README.md)
+2. Review the [documentation](docs/)
 3. Open an issue on GitHub with a detailed description

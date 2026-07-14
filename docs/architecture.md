@@ -4,7 +4,7 @@
 
 ```
 SaANN/
-├── README.md                                       # This file
+├── README.md                                       # README markdown
 ├── LICENSE                                         # MIT License
 ├── requirements.txt                                # Project dependencies
 ├── setup.py                                        # Installation configuration
@@ -49,11 +49,11 @@ SaANN/
     └── test_metrics.py                             # Test script for metrics
 │
 └── docs/
-    ├── api-reference.md
-    ├── architecture.md
-    ├── features.md
-    ├── installation.md
-    └── quickstart.md
+    ├── api-reference.md                            # API documentation
+    ├── architecture.md                             # This file
+    ├── features.md                                 # Examples of SaANN usage
+    ├── installation.md                             # Installation guide
+    └── quickstart.md                               # Get started guide
 ```
 
 ## Architecture Overview
