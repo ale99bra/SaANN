@@ -293,7 +293,7 @@ To initialize the model, from `saann.transformer.transformer_model`:
 ### TransformerModel
 Class for the transformer model
 
-**`__init__(self, vocab_size, embed_dim, num_heads, ff_hidden_dim, num_layers, max_seq_len, learned_positional)__`**
+**`__init__(self, vocab_size, embed_dim, num_heads, ff_hidden_dim, num_layers, max_seq_len, learned_positional)`**
 
 Initialize the model
 - `vocab_size` (int): Size of the tokenizer vocabolary
