@@ -164,6 +164,18 @@ class TestSequentialModel(unittest.TestCase):
         self.assertIsInstance(predictions, np.ndarray)
     
     def test_save_load(self):
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32,
+            wd=0.02,
+            loss_function="mae",
+            graphical=False,
+            log_plot=False
+        )
         self.model.save_model(path = "SequentialModel.pickle")
         model = load_model(path = "SequentialModel.pickle")
 
@@ -257,6 +269,18 @@ class TestCNN(unittest.TestCase):
         self.assertIsInstance(predictions, np.ndarray)
     
     def test_save_load(self):
+        input_size = self.model.get_input_size(self.X_train)
+        num_neurons = input_size//2 + self.y_train.shape[1]
+        layers_info = [(input_size, num_neurons, "relu", "he"), (num_neurons, self.y_train.shape[1], "softmax", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32,
+            report=True,
+            graphical=True
+        )
         self.model.save_model(path = "CNNModel.pickle")
         model = load_model(path = "CNNModel.pickle")
 
@@ -386,7 +410,19 @@ class TestRecurrentModel(unittest.TestCase):
         self.assertEqual(predictions.shape, (self.X_test.shape[0], 1))  
 
     def test_save_load(self):
-        self.model.save_model(path = "RNNModel.pickle")
+        model = RecurrentModel()
+        model.construct(
+            input_dim=1,
+            hidden_dim=32,
+            output_dim=1,
+            learning_rate= 1e-3,
+            activation_function="linear",
+            act_function_rnn="tanh",
+            many_to_one=True,
+            normalization=True
+        )
+        model.fit(self.X_train, self.y_train, epochs=15, batch_size=32, loss_function="mse", graphical=False)
+        model.save_model(path = "RNNModel.pickle")
         model = load_model(path = "RNNModel.pickle")
 
 class TestCrossTrainingSequentialModel(unittest.TestCase):
@@ -451,7 +487,8 @@ class TestCrossTrainingSequentialModel(unittest.TestCase):
             loss_function="huber:2",
             fine_tuning_ratio = 0.7,           
             graphical=False,
-            log_plot=False
+            log_plot=False,
+            parallelize = True
         )
         
         predictions = self.model.predict(self.X_test)
@@ -515,6 +552,20 @@ class TestCrossTrainingSequentialModel(unittest.TestCase):
         self.assertIsInstance(predictions, np.ndarray)
 
     def test_save_load(self):
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32,
+            wd=0.015,
+            loss_function="huber:2",
+            fine_tuning_ratio = 0.7,           
+            graphical=False,
+            log_plot=False,
+            parallelize = True
+        )
         self.model.save_model(path = "CrossTrainingModel.pickle")
         model = load_model(path = "CrossTrainingModel.pickle")
 
