@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from saann.models import SequentialModel, CNN, RecurrentModel
+from saann.models import SequentialModel, CNN, RecurrentModel, CrossTrainingSequentialModel, load_model
 from saann.processing import train_test_split
 
 def generate_sine_wave_dataset(
@@ -162,6 +162,11 @@ class TestSequentialModel(unittest.TestCase):
         predictions = self.model.predict(self.X_test)
         
         self.assertIsInstance(predictions, np.ndarray)
+    
+    def test_save_load(self):
+        self.model.save_model(path = "SequentialModel.pickle")
+        model = load_model(path = "SequentialModel.pickle")
+
 
 class TestCNN(unittest.TestCase):
     """Test suite for CNN class"""
@@ -250,6 +255,10 @@ class TestCNN(unittest.TestCase):
         predictions = self.model.predict(self.X_test)
         
         self.assertIsInstance(predictions, np.ndarray)
+    
+    def test_save_load(self):
+        self.model.save_model(path = "CNNModel.pickle")
+        model = load_model(path = "CNNModel.pickle")
 
 class TestRecurrentModel(unittest.TestCase):
     """Testing of recurrent model"""
@@ -354,6 +363,160 @@ class TestRecurrentModel(unittest.TestCase):
         )
 
         model_lstm.fit(self.X_train, self.y_train, epochs=15, batch_size=32, loss_function="mse", graphical=False)
+
+    def test_predict_returns_correct_shape(self):
+        """Test that predict returns correct output shape"""
+        model = RecurrentModel()
+        model.construct(
+            input_dim=1,
+            hidden_dim=32,
+            output_dim=1,
+            learning_rate= 1e-3,
+            activation_function="linear",
+            act_function_rnn="tanh",
+            many_to_one=True,
+            normalization=True
+        )
+
+        model.fit(self.X_train, self.y_train, epochs=15, batch_size=32, loss_function="mse", graphical=False)
+        
+        predictions = model.predict(self.X_test)
+        
+        # Check shape: should be (n_samples, n_outputs)
+        self.assertEqual(predictions.shape, (self.X_test.shape[0], 1))  
+
+    def test_save_load(self):
+        self.model.save_model(path = "RNNModel.pickle")
+        model = load_model(path = "RNNModel.pickle")
+
+class TestCrossTrainingSequentialModel(unittest.TestCase):
+    """Test suite for CrossTrainingSequentialModel class"""
+
+    def setUp(self):
+        """Initialize test fixtures before each test"""
+        self.model = CrossTrainingSequentialModel(gpu = False)
+        np.random.seed(42)
+        self.X_train = np.random.randn(50, 5)
+        self.y_train = np.random.randn(50, 1)
+        self.X_test = np.random.randn(20, 5)
+
+    def test_model_initialization(self):
+        """Test that model initializes correctly"""
+        self.assertIsNotNone(self.model)
+
+    def test_construct_creates_layers(self):
+        """Test that construct method creates layers"""
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+
+    def test_construct_sets_learning_rate(self):
+        """Test that construct sets learning rate"""
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        learning_rate = 0.001
+        self.model.construct(layers_info, learning_rate=learning_rate)
+        
+        self.assertEqual(self.model.learning_rate, learning_rate)
+
+    def test_fit_trains_without_error(self):
+        """Test that fit method trains the model without errors"""
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        
+        # Should not raise any exception
+        try:
+            self.model.fit(
+                self.X_train, 
+                self.y_train, 
+                epochs=2, 
+                batch_size=32,
+                loss_function='Huber',
+                fine_tuning_ratio = 0.5,
+                wd = 0,
+                graphical=False,
+                log_plot=False
+            )
+        except Exception as e:
+            self.fail(f"fit() raised {type(e).__name__} unexpectedly: {e}")
+
+    def test_predict_returns_correct_shape(self):
+        """Test that predict returns correct output shape"""
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32,
+            wd=0.015,
+            loss_function="huber:2",
+            fine_tuning_ratio = 0.7,           
+            graphical=False,
+            log_plot=False
+        )
+        
+        predictions = self.model.predict(self.X_test)
+        
+        # Check shape: should be (n_samples, n_outputs)
+        self.assertEqual(predictions.shape, (self.X_test.shape[0], 1))
+
+    def test_predict_returns_numpy_array(self):
+        """Test that predict returns a numpy array"""
+        layers_info = [(5, 10, "relu", "he"), (10, 1, "linear", "he")]
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            self.y_train, 
+            epochs=1, 
+            batch_size=32,
+            wd=0.02,
+            loss_function="mae",
+            fine_tuning_ratio = 0,
+            graphical=False,
+            log_plot=False
+        )
+        
+        predictions = self.model.predict(self.X_test)
+        
+        self.assertIsInstance(predictions, np.ndarray)
+
+    def test_multiple_layer_configuration(self):
+        """Test model with different layer configurations"""
+        layers_info = [
+            (5, 16, "relu", "he"),
+            (16, 8, "sigmoid", "random"),
+            (8, 1, "linear", "xavier")
+        ]
+        self.model.construct(layers_info, learning_rate=0.01)
+    
+    def test_softmax(self):
+        """Test classification model with softmax activation"""
+        layers_info = [(5, 10, "relu", "he"), (10, 2, "softmax", "he")]
+        y_train = []
+        import random
+        for i in range(len(self.X_train)):
+            y_rand = random.choice(([0, 1], [1, 0]))
+            y_train.append(y_rand)
+        y_train = np.array(y_train)
+        y_train = y_train.reshape(-2, 2)
+        self.model.construct(layers_info, learning_rate=0.01)
+        self.model.fit(
+            self.X_train, 
+            y_train, 
+            epochs=1, 
+            batch_size=32,
+            wd=0.02,
+            graphical=False,
+            fine_tuning_ratio = 0.8,
+            log_plot=False
+        )
+
+        predictions = self.model.predict(self.X_test)
+        
+        self.assertIsInstance(predictions, np.ndarray)
+
+    def test_save_load(self):
+        self.model.save_model(path = "CrossTrainingModel.pickle")
+        model = load_model(path = "CrossTrainingModel.pickle")
 
 if __name__ == '__main__':
     unittest.main()
