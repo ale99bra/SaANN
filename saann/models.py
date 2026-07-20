@@ -2054,8 +2054,12 @@ class CrossTrainingSequentialModel:
                     tot_loss1 += BE.xp.mean(loss1)
                     tot_loss2 += BE.xp.mean(loss1)
 
-                    d1 = self.loss_gradient(y_true=y_batch, y_pred=y1)
-                    d2 = self.loss_gradient(y_true=y_batch, y_pred=y2)
+                    try:
+                        d1 = self.loss_gradient(y_true=y_batch, y_pred=y1)
+                        d2 = self.loss_gradient(y_true=y_batch, y_pred=y2)
+                    except:
+                        d1 = self.loss_gradient(y_true=y_batch, y_pred=y1, delta = self.delta)
+                        d2 = self.loss_gradient(y_true=y_batch, y_pred=y2, delta = self.delta)
 
                     self.model1.backward(d1)
                     self.model2.backward(d2)
@@ -2076,8 +2080,12 @@ class CrossTrainingSequentialModel:
                         y1_cross = self.model1.forward(X_batch)
                         y2_cross = self.model2.forward(X_batch)
 
-                        d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross)
-                        d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross)
+                        try:
+                            d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross)
+                            d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross)
+                        except:
+                            d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross, delta=self.delta)
+                            d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross, delta=self.delta)
 
                         self.model1.backward(d1_cross)
                         self.model2.backward(d2_cross)
@@ -2094,7 +2102,10 @@ class CrossTrainingSequentialModel:
                     def forward_backward(model, Xb, yb):
                         y = model.forward(Xb)
                         loss = self.loss_func(y_true=yb, y_pred=y)
-                        d = self.loss_gradient(y_true=yb, y_pred=y)
+                        try:
+                            d = self.loss_gradient(y_true=yb, y_pred=y)
+                        except:
+                            d = self.loss_gradient(y_true=yb, y_pred=y, delta=self.delta)
                         model.backward(d)
                         return loss, [layer.weights.copy() for layer in model.layers]
 
@@ -2117,7 +2128,10 @@ class CrossTrainingSequentialModel:
 
                         def forward_backward_cross(model, Xb, yb):
                             y = model.forward(Xb)
-                            d = self.loss_gradient(y_true=yb, y_pred=y)
+                            try:
+                                d = self.loss_gradient(y_true=yb, y_pred=y)
+                            except:
+                                d = self.loss_gradient(y_true=yb, y_pred=y, delta=self.delta)
                             model.backward(d)
                             return None
 
