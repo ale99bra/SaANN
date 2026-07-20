@@ -9,7 +9,6 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 *Major update*: VERSION 0.3.0
 - Added experimental feature: Cross‑Training MLPs — training of two parallel MLPs as a way to regularize early training
 - Added TransformerModel — see [docs/features.md](docs/features.md#-transformermodel-gptstyle-decoderonly-transformer)
-    - Tests not yet implemented
 
 **⚠️ Important**: SaANN is designed for personal learning, not production. This project was created as an exercise to deepen my understanding of neural networks. While others are welcome to explore or use it, its primary purpose is educational for myself.
 
