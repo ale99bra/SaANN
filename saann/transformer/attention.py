@@ -48,7 +48,7 @@ class ScaledDotProductAttention:
         attention_2D = AF.softmax(scores_2D)
 
         self.attention = attention_2D.reshape(B, H, L, L)
-        self.scores = scores
+        # self.scores = scores -> less memory pressure
 
         return BE.xp.matmul(self.attention, V)
 
@@ -107,10 +107,10 @@ class MultiHeadAttention:
             raise ValueError("Embedding dimension must be divisible by the number of heads.")
 
         # weights: (embed_dim, embed_dim)
-        self.W_q = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim))
-        self.W_k = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim))
-        self.W_v = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim))
-        self.W_o = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim))
+        self.W_q = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim)).astype(BE.dtype)
+        self.W_k = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim)).astype(BE.dtype)
+        self.W_v = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim)).astype(BE.dtype)
+        self.W_o = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, embed_dim)).astype(BE.dtype)
 
         # gradients
         self.d_W_q = BE.xp.zeros_like(self.W_q)
@@ -130,6 +130,7 @@ class MultiHeadAttention:
         self.V_heads = None
         self.context_heads = None
         self.context_merged = None
+        self.W_qkv = None
 
     def _split_heads(self, x):
         """
@@ -166,10 +167,15 @@ class MultiHeadAttention:
         """
         self.x = x
 
-        # linear projections
-        self.Q_lin = BE.xp.matmul(x, self.W_q)
-        self.K_lin = BE.xp.matmul(x, self.W_k)
-        self.V_lin = BE.xp.matmul(x, self.W_v)
+        # Fuse the three token-wise projections into one BLAS/CUDA GEMM.
+        B, L, E = x.shape
+        x_2D = x.reshape(B * L, E)
+        self.W_qkv = BE.xp.concatenate((self.W_q, self.W_k, self.W_v), axis=1)
+        qkv_2D = BE.xp.matmul(x_2D, self.W_qkv)
+        self.Q_lin, self.K_lin, self.V_lin = BE.xp.split(qkv_2D, 3, axis=1)
+        self.Q_lin = self.Q_lin.reshape(B, L, E)
+        self.K_lin = self.K_lin.reshape(B, L, E)
+        self.V_lin = self.V_lin.reshape(B, L, E)
 
         # split -> heads
         self.Q_heads = self._split_heads(self.Q_lin)
@@ -182,7 +188,8 @@ class MultiHeadAttention:
         # merge
         self.context_merged = self._merge_heads(self.context_heads)
 
-        out = BE.xp.matmul(self.context_merged, self.W_o)
+        context_2D = self.context_merged.reshape(B * L, E)
+        out = BE.xp.matmul(context_2D, self.W_o).reshape(B, L, E)
 
         return out
 
@@ -199,7 +206,10 @@ class MultiHeadAttention:
         self.d_W_o += BE.xp.matmul(context_2D.T, grad_out_2D)
         
         # d_context_merge = grad_out x W_o^T
-        d_context_merged = BE.xp.matmul(grad_output, BE.xp.transpose(self.W_o, (1,0)))
+        d_context_merged = BE.xp.matmul(
+            grad_out_2D,
+            BE.xp.transpose(self.W_o, (1,0))
+        ).reshape(B, L, E)
 
         # backwards to merge heads
         d_context_heads = self._split_heads(d_context_merged)
@@ -218,17 +228,19 @@ class MultiHeadAttention:
         d_K_2D = d_K_lin.reshape(B*L, E)
         d_V_2D = d_V_lin.reshape(B*L, E)
 
-        # update der of weights
-        self.d_W_q += BE.xp.matmul(x_2D.T, d_Q_2D)
-        self.d_W_k += BE.xp.matmul(x_2D.T, d_K_2D)
-        self.d_W_v += BE.xp.matmul(x_2D.T, d_V_2D)
+        # Fuse the Q/K/V weight gradients into one GEMM, then split them.
+        d_qkv_2D = BE.xp.concatenate((d_Q_2D, d_K_2D, d_V_2D), axis=1)
+        d_w_qkv = BE.xp.matmul(x_2D.T, d_qkv_2D)
+        d_w_q, d_w_k, d_w_v = BE.xp.split(d_w_qkv, 3, axis=1)
+        self.d_W_q += d_w_q
+        self.d_W_k += d_w_k
+        self.d_W_v += d_w_v
 
-        # contributions for the x tensor -> d_x_p = d_P_lin x W_p^T
-        d_x_q = BE.xp.matmul(d_Q_lin, BE.xp.transpose(self.W_q, (1,0)))
-        d_x_k = BE.xp.matmul(d_K_lin, BE.xp.transpose(self.W_k, (1,0)))
-        d_x_v = BE.xp.matmul(d_V_lin, BE.xp.transpose(self.W_v, (1,0)))
-
-        d_x = d_x_q + d_x_k + d_x_v
+        # Fuse the three input-gradient GEMMs into one GEMM.
+        d_x = BE.xp.matmul(
+            d_qkv_2D,
+            BE.xp.transpose(self.W_qkv, (1,0))
+        ).reshape(B, L, E)
 
         return d_x
 

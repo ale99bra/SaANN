@@ -6,16 +6,20 @@ from .. import backend as BE
 from .blocks import TransformerBlock
 from .embeddings import TokenEmbedding, PositionalEmbedding
 
-def causal_mask(seq_len, batch_size, xp):
-    """
-    returns: (batch, 1, seq_len, seq_len) with 1 for allowed, 0 for masked
-    """
+"""
+def causal_mask(seq_len, batch_size, xp): # OLD
+    #returns: (batch, 1, seq_len, seq_len) with 1 for allowed, 0 for masked
     i = xp.arange(seq_len)[:, None]
     j = xp.arange(seq_len)[None, :]
     mask = (j <= i).astype(xp.int32)
     mask = mask[None, None, :, :]
     mask = xp.broadcast_to(mask, (batch_size, 1, seq_len, seq_len))
     return mask
+"""
+
+def causal_mask(seq_len, xp):
+    mask = xp.tril(xp.ones((seq_len, seq_len), dtype=bool))
+    return mask[None, None, :, :]
 
 class TransformerModel:
     """
@@ -56,8 +60,8 @@ class TransformerModel:
         ]
 
         #final projection: embed_dim -> vocab_size
-        self.W_out = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, vocab_size))
-        self.b_out = BE.xp.zeros((vocab_size,))
+        self.W_out = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, vocab_size)).astype(BE.dtype)
+        self.b_out = BE.xp.zeros((vocab_size,), dtype=BE.dtype)
 
         self.d_W_out = BE.xp.zeros_like(self.W_out)
         self.d_b_out = BE.xp.zeros_like(self.b_out)
@@ -82,7 +86,9 @@ class TransformerModel:
         x = self.pos_emb.forward(tok)
         self.x_embed = x
 
-        mask = causal_mask(L, B, BE.xp)
+        #mask = causal_mask(L, B, BE.xp) OLD
+
+        mask = causal_mask(L, BE.xp)
 
         self.x_blocks = []
         for block in self.blocks:

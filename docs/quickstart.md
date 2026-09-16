@@ -185,8 +185,6 @@ from saann.generation import generate_top_p
 from saann.training import train_transformer, load_model, create_optimizer
 from saann.tokenizer import CharTokenizer, ByteTokenizer
 
-BE.dtype = BE.xp.float16 # Optional - lighter models
-
 # Create the Tokenizer (either Byte or Char)
 tokenizer = ByteTokenizer()  # or: tokenizer = CharTokenizer(text)
 
@@ -209,7 +207,7 @@ model = TransformerModel(
 )
 
 # Create optimizer
-optimizer = create_optimizer(model)
+optimizer = create_optimizer(model, learning_rate=1e-4, wd=0.1)
 
 # Process data
 encoded_text = tokenizer.encode(text) # 'text' is the input data

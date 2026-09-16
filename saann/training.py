@@ -3,27 +3,35 @@
 # Licensed under the MIT License
 
 from . import backend as BE
-from .losses import cross_entropy_logits, cross_entropy_logits_der
+from .losses import cross_entropy_logits, cross_entropy_logits_der, cross_entropy_logits_with_grad
 import os
 from .transformer.transformer_model import TransformerModel
 from .tokenizer import ByteTokenizer
 from .gradients import AdamW
 import numpy as np
 import datetime
+import math
 
 VERSION = "0.3.0"
 LIST_VERSIONS_COMPATIBLE = [VERSION]
 
 def train_transformer_step(model, optimizer, tokens, targets):
 
+    tokens = BE.xp.asarray(tokens, dtype=BE.xp.int32)
+    targets = BE.xp.asarray(targets, dtype=BE.xp.int32)
+
     #forward pass
     logits = model.forward(tokens)
 
+    """ OLD
     #loss
     loss = cross_entropy_logits(logits=logits, target_ids=targets)
-
     #backward pass
     d_logits = cross_entropy_logits_der(logits=logits, target_ids=targets)
+    """
+
+    loss, d_logits = cross_entropy_logits_with_grad(logits, targets)
+
     model.backward(d_logits)
 
     #gradient clipping
@@ -65,7 +73,8 @@ class LRScheduler:
                        (self.total_steps - self.warmup_steps)
 
             # cosine = 0.5 * (1 + cos(pi * progress))
-            cosine = 0.5 * (1.0 + xp.cos(xp.pi * progress))
+            # cosine = 0.5 * (1.0 + xp.cos(xp.pi * progress)) -> xp
+            cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
 
             lr = self.min_lr + (self.max_lr - self.min_lr) * cosine
 
@@ -112,6 +121,8 @@ def train_transformer(
         raise ValueError(f"Not enough data point. Dataset length: {len(data)} - seq_len:{seq_len}.")
 
     os.makedirs(checkpoint_dir, exist_ok=True)
+
+    data = BE.xp.asarray(data, dtype=BE.xp.int32)
 
     batches = make_batches(tokens=data, batch_size=batch_size, seq_len=seq_len)
 

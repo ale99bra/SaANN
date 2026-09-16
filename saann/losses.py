@@ -170,6 +170,29 @@ def cross_entropy_logits_der(logits, target_ids):
     grad = (probs - y_true)
     return grad
 
+def cross_entropy_logits_with_grad(logits, target_ids):
+    B, L, V = logits.shape
+    logits_2d = logits.reshape(B * L, V)
+    target_ids = BE.xp.asarray(target_ids, dtype=BE.xp.int32).reshape(-1)
+
+    rows = BE.xp.arange(B * L)
+
+    max_logits = BE.xp.max(logits_2d, axis=1, keepdims=True)
+    shifted = logits_2d - max_logits
+    exp_logits = BE.xp.exp(shifted)
+    sum_exp = BE.xp.sum(exp_logits, axis=1, keepdims=True)
+
+    log_probs = shifted - BE.xp.log(sum_exp)
+    loss = -BE.xp.mean(log_probs[rows, target_ids])
+
+    probs = exp_logits / sum_exp
+    probs[rows, target_ids] -= 1.0
+
+    # Match the mean used by the loss.
+    grad_logits = probs / (B * L)
+
+    return loss, grad_logits.reshape(B, L, V)
+
 if __name__ == "__main__":
     pred = BE.xp.linspace(0, 100, num = 26)
     true = BE.xp.linspace(0, 90, num = 26)

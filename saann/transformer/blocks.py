@@ -21,11 +21,11 @@ class FeedForward:
         self.hidden_dim = hidden_dim
 
         # parameters (weights, bias) for the 2 layers
-        self.W1 = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, hidden_dim))
-        self.b1 = BE.xp.zeros((hidden_dim,))
+        self.W1 = BE.xp.random.uniform(-0.01, 0.01, (embed_dim, hidden_dim)).astype(BE.dtype)
+        self.b1 = BE.xp.zeros((hidden_dim,), dtype=BE.dtype)
 
-        self.W2 = BE.xp.random.uniform(-0.01, 0.01, (hidden_dim, embed_dim))
-        self.b2 = BE.xp.zeros((embed_dim,))
+        self.W2 = BE.xp.random.uniform(-0.01, 0.01, (hidden_dim, embed_dim)).astype(BE.dtype)
+        self.b2 = BE.xp.zeros((embed_dim,), dtype=BE.dtype)
 
         # gradients of parameters
         self.d_W1 = BE.xp.zeros_like(self.W1)
@@ -44,12 +44,16 @@ class FeedForward:
         returns: (batch, seq_len, embed_dim)
         """
         self.x = x
-        self.h = BE.xp.matmul(x, self.W1) + self.b1 #pre-activation layer
+        B, L, E = x.shape
+        x_2D = x.reshape(B * L, E)
+        h_2D = BE.xp.matmul(x_2D, self.W1) + self.b1
+        self.h = h_2D.reshape(B, L, self.hidden_dim)
         self.a = AF.reLU(self.h) #return BE.xp.maximum(0, x)
 
-        out = BE.xp.matmul(self.a, self.W2) + self.b2
+        a_2D = self.a.reshape(B * L, self.hidden_dim)
+        out = BE.xp.matmul(a_2D, self.W2) + self.b2
 
-        return out
+        return out.reshape(B, L, E)
 
     def backward(self, grad_output):
         """
@@ -65,7 +69,11 @@ class FeedForward:
         self.d_b2 += BE.xp.sum(grad_output, axis = (0,1))
 
         # gradient of act
-        d_a = BE.xp.matmul(grad_output, BE.xp.transpose(self.W2, (1,0)))
+        d_a_2D = BE.xp.matmul(
+            grad_out_2D,
+            BE.xp.transpose(self.W2, (1,0))
+        )
+        d_a = d_a_2D.reshape(B, L, self.hidden_dim)
 
         # ReLU backward
         d_h = AF.reLU_der(self.h) * d_a #reLU_der(f) -> return BE.xp.where(f > 0, 1, 0)
@@ -76,8 +84,11 @@ class FeedForward:
         self.d_W1 += BE.xp.matmul(x_2D.T, d_h_2D)
         self.d_b1 += BE.xp.sum(d_h, axis=(0,1))
 
-        d_x = BE.xp.matmul(d_h, BE.xp.transpose(self.W1, (1,0)))
-        return d_x
+        d_x_2D = BE.xp.matmul(
+            d_h_2D,
+            BE.xp.transpose(self.W1, (1,0))
+        )
+        return d_x_2D.reshape(B, L, E)
 
 
     def zero_grad(self):
@@ -101,8 +112,8 @@ class LayerNorm:
         self.eps = eps
 
         # learnable parameters
-        self.gamma = BE.xp.ones((embed_dim,))
-        self.beta  = BE.xp.zeros((embed_dim,))
+        self.gamma = BE.xp.ones((embed_dim,), dtype=BE.dtype)
+        self.beta  = BE.xp.zeros((embed_dim,), dtype=BE.dtype)
 
         # gradients
         self.d_gamma = BE.xp.zeros_like(self.gamma)
