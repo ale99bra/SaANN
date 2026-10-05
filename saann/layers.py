@@ -100,7 +100,7 @@ class DenseLayer:
         if self.activation == "softmax":
             pass
         else:
-            self.output = self.dropout.forward(self.output)
+            self.output = self.dropout.forward(self.output, training=training)
 
         return self.output
     
@@ -122,8 +122,8 @@ class DenseLayer:
 
         batch_size = self.inputs.shape[0]
 
-        self.d_weights = BE.xp.dot(self.inputs.T, d_activation_output) / batch_size # gradient of loss w.r.t. weights
-        self.d_biases = BE.xp.sum(d_activation_output, axis=0, keepdims=True) / batch_size # gradient of loss w.r.t. biases
+        self.d_weights = BE.xp.dot(self.inputs.T, d_activation_output) # / batch_size # gradient of loss w.r.t. weights
+        self.d_biases = BE.xp.sum(d_activation_output, axis=0, keepdims=True) # / batch_size # gradient of loss w.r.t. biases
 
         d_loss_wrt_prev_output = BE.xp.dot(d_activation_output, self.weights.T)
 
@@ -456,7 +456,7 @@ class RNNLayer:
 
         if self.normalization:
             self.rmsnorm.d_g = clip(self.rmsnorm.d_g, clip_value=0.5)
-            self.rmsnorm.d_g /= self.seq_len
+            # self.rmsnorm.d_g /= self.seq_len
             self.rmsnorm.g -= (learning_rate*0.1) * self.rmsnorm.d_g
 
         self.d_Wxh = clip(self.d_Wxh)
@@ -613,11 +613,22 @@ class GRULayer:
             h_tilde = h_tilde_list[t]
 
             # total gradient at this timestep
-            d_h = d_H[:, t, :] + d_h_next
+            #d_h = d_H[:, t, :] + d_h_next
+            d_h_output = d_H[:, t, :]
 
-            if self.normalization:
+            """ if self.normalization:
                 x_t_norm_in, norm_t, rms_t = rms_x_list[t]
-                d_h = self.rmsnorm.backward(d_h, x_t_norm_in, norm_t, rms_t)
+                d_h = self.rmsnorm.backward(d_h, x_t_norm_in, norm_t, rms_t) """
+            if self.normalization:
+                raw_h, norm_h, rms_h = rms_x_list[t]
+                d_h_output = self.rmsnorm.backward(
+                    d_out=d_h_output,
+                    x=raw_h,
+                    norm=norm_h,
+                    rms=rms_h,
+                )
+
+            d_h = d_h_output + d_h_next
 
             # gradients h_prev
             d_h_tilde = d_h * (1 - z_t)
@@ -672,7 +683,7 @@ class GRULayer:
 
         if self.normalization:
             self.rmsnorm.d_g = clip(self.rmsnorm.d_g, clip_value=0.5)
-            self.rmsnorm.d_g /= self.seq_len
+            # self.rmsnorm.d_g /= self.seq_len
             self.rmsnorm.g -= (learning_rate*0.1) * self.rmsnorm.d_g
 
         self.d_Wz = clip(self.d_Wz)
@@ -859,11 +870,24 @@ class LSTMLayer:
             o_t = o_list[t]
             c_tilde = c_tilde_list[t]
 
-            dh = dH[:, t, :] + dh_next
+            """ dh = dH[:, t, :] + dh_next
 
             if self.normalization:
                 x_t_norm_in, norm_t, rms_t = rms_x_list[t]
-                dh = self.rmsnorm.backward(dh, x_t_norm_in, norm_t, rms_t)
+                dh = self.rmsnorm.backward(dh, x_t_norm_in, norm_t, rms_t) """
+
+            d_h_output = dH[:, t, :]
+
+            if self.normalization:
+                raw_h, norm_h, rms_h = rms_x_list[t]
+                d_h_output = self.rmsnorm.backward(
+                    d_out=d_h_output,
+                    x=raw_h,
+                    norm=norm_h,
+                    rms=rms_h,
+                )
+
+            dh = d_h_output + dh_next
 
             do = dh * AF.tanh(c_t)
             do_raw = AF.sigmoid_der(o_t) * do
@@ -924,7 +948,7 @@ class LSTMLayer:
 
         if self.normalization:
             self.rmsnorm.d_g = clip(self.rmsnorm.d_g, clip_value=0.5)
-            self.rmsnorm.d_g /= self.seq_len
+            # self.rmsnorm.d_g /= self.seq_len
             self.rmsnorm.g -= (learning_rate*0.1) * self.rmsnorm.d_g
         
         self.d_W_f = clip(self.d_W_f)

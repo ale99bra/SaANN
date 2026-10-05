@@ -2,9 +2,59 @@
 # Copyright (c) 2026 Alessio Branda
 # Licensed under the MIT License
 
-import numpy as np
 from . import backend as BE
 from . import activation_functions as AF
+from functools import partial
+import math
+
+def get_loss_functions(loss_spec):
+    if not isinstance(loss_spec, str):
+        raise TypeError("loss_function must be a string.")
+
+    parts = loss_spec.split(":")
+    if len(parts) > 2:
+        raise ValueError(
+            f"Invalid loss specification {loss_spec!r}; expected 'Huber' or 'Huber:delta'."
+        )
+
+    name = parts[0].strip().lower()
+    has_delta = len(parts) == 2
+
+    if name == "huber":
+        if has_delta:
+            try:
+                delta = float(parts[1])
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid Huber delta {parts[1]!r}; expected a finite positive number."
+                ) from exc
+        else:
+            delta = 1.0
+
+        if not math.isfinite(delta) or delta <= 0:
+            raise ValueError("Huber delta must be a finite positive number.")
+
+        return (
+            partial(Huber, delta=delta),
+            partial(Huber_der, delta=delta),
+            name,
+        )
+
+    if has_delta:
+        raise ValueError(f"Only Huber accepts a delta suffix; got {loss_spec!r}.")
+
+    functions = {
+        "mse": (MSE, MSE_der),
+        "mae": (MAE, MAE_der),
+        "cross-entropy": (cross_entropy, cross_entropy_der),
+    }
+
+    try:
+        loss_func, loss_gradient = functions[name]
+    except KeyError as exc:
+        raise ValueError(f"Unknown loss function {name!r}.") from exc
+
+    return loss_func, loss_gradient, name
 
 # Loss functions and their derivative
 def MSE(y_true, y_pred):
@@ -25,7 +75,8 @@ def MSE_der(y_true, y_pred):
     :param y_true: Testing values array.
     :param y_pred: Array of values predicted by the model.
     """
-    return 2 * (y_pred - y_true) / y_true.shape[0] #normalized by the size
+    # return 2 * (y_pred - y_true) / y_true.shape[0] #normalized by the size
+    return 2 * (y_pred - y_true) / y_true.size
 
 def MAE(y_true, y_pred):
     """
@@ -45,7 +96,8 @@ def MAE_der(y_true, y_pred):
     :param y_true: Testing values array.
     :param y_pred: Array of values predicted by the model.
     """
-    return BE.xp.sign(y_pred - y_true) / y_true.shape[0]
+    # return BE.xp.sign(y_pred - y_true) / y_true.shape[0]
+    return BE.xp.sign(y_pred - y_true) / y_true.size
 
 def R2_score(y_true, y_pred):
     """
@@ -61,7 +113,7 @@ def R2_score(y_true, y_pred):
 
     return 1 - res_SS/tot_SS
 
-def Huber(y_true, y_pred, delta = 1):
+def Huber(y_true, y_pred, delta = 1.0):
     """
     Calculates the Huber loss.\n
     Parameters
@@ -70,15 +122,17 @@ def Huber(y_true, y_pred, delta = 1):
     :param y_pred: Array of values predicted by the model.
     :param delta: hyperparameter for defining the threshold - quadratic to linear
     """
-    diff = y_true - y_pred
-    quadratic = (diff**2)/2
-    linear = delta * (BE.xp.abs(diff) - delta/2)
-    
-    score = BE.xp.mean(BE.xp.where(BE.xp.abs(diff) <= delta, quadratic, linear))
+    error = y_pred - y_true
+    abs_error = BE.xp.abs(error)
 
-    return score
+    elementwise_loss = BE.xp.where(
+        abs_error <= delta,
+        0.5 * error**2,
+        delta * (abs_error - 0.5 * delta),
+    )
+    return BE.xp.mean(elementwise_loss)
 
-def Huber_der(y_true, y_pred, delta):
+def Huber_der(y_true, y_pred, delta = 1.0):
     """
     Calculates the Huber loss' gradient.\n
     Parameters
@@ -87,13 +141,22 @@ def Huber_der(y_true, y_pred, delta):
     :param y_pred: Array of values predicted by the model.
     :param delta: hyperparameter for defining the threshold - quadratic to linear
     """
-    diff = y_true - y_pred
+    """ diff = y_true - y_pred
     quadratic_der = -diff
     linear_der = -delta * BE.xp.sign(diff)
     
     score_der = BE.xp.mean(BE.xp.where(BE.xp.abs(diff) <= delta, quadratic_der, linear_der))
 
-    return score_der
+    return score_der """
+
+    error = y_pred - y_true
+
+    elementwise_gradient = BE.xp.where(
+        BE.xp.abs(error) <= delta,
+        error,
+        delta * BE.xp.sign(error),
+    )
+    return elementwise_gradient / y_true.size
 
 def cross_entropy(y_true, y_pred, epsilon=1e-12):
     """
@@ -115,7 +178,8 @@ def cross_entropy_der(y_true, y_pred):
     :param y_true: Testing values array.
     :param y_pred: Array of values predicted by the model.
     """
-    return (y_pred - y_true)
+    # return (y_pred - y_true)
+    return (y_pred - y_true) / y_true.shape[0]
 
 def cross_entropy_logits(logits, target_ids):
     """

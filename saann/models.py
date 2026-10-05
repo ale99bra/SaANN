@@ -14,8 +14,8 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.3.0"
-LIST_VERSIONS_COMPATIBLE = ["0.2.7", VERSION]
+VERSION = "0.3.1"
+LIST_VERSIONS_COMPATIBLE = ["0.2.7", "0.3.0", VERSION]
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -267,7 +267,7 @@ class SequentialModel:
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
 
-        try:
+        """ try:
             tmp = loss_function.split(sep=':')
             self.delta = float(tmp[1])
             loss_function = tmp[0]
@@ -291,8 +291,26 @@ class SequentialModel:
             self.loss_func = losses.cross_entropy
             self.loss_gradient = losses.cross_entropy_der
         else:
-            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
+            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').") """
 
+        self.loss_func, self.loss_gradient, loss_name = (
+            losses.get_loss_functions(loss_function)
+        )
+
+        if self.mlp.layers[-1].activation == "softmax":
+            if loss_name != "cross-entropy":
+                warnings.warn(
+                    "For softmax activation, cross-entropy is required. "
+                    "Switching to cross-entropy.",
+                    UserWarning,
+                )
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+            loss_name = "cross-entropy"
+        elif loss_name == "cross-entropy":
+            raise ValueError(
+                "Cross-entropy requires a softmax output activation."
+            )
 
         if real_time == True and graphical == False:
             warnings.warn("The parameter graphical is set to False while real_time is True. Assuming graphical = True.")
@@ -313,7 +331,8 @@ class SequentialModel:
             X_shuffled = X_train[idx]
             y_shuffled = y_train[idx]
             
-            tot_loss = 0
+            # tot_loss = 0
+            weighted_loss_total = 0.0
             
             # Process data in mini-batches
             for i in range(0, num_samples, batch_size):
@@ -322,17 +341,16 @@ class SequentialModel:
 
                 
                 y_pred = self.mlp.forward(X_batch)
-                try:
-                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
-                except:
-                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
+                # loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
 
-                tot_loss += BE.xp.mean(loss)
+                # tot_loss += BE.xp.mean(loss)
+
+                batch_loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
+
+                actual_batch_size = y_batch.shape[0]
+                weighted_loss_total += batch_loss * actual_batch_size
                 
-                try:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
-                except:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
+                d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
 
                 self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred)
     
@@ -340,7 +358,8 @@ class SequentialModel:
                     self.optimizer.update(layer, wd=wd)
                 
             # Average loss over all batches for reporting
-            avg_loss = tot_loss / num_batches
+            # avg_loss = tot_loss / num_batches
+            avg_loss = weighted_loss_total / num_samples
             if (epoch + 1) % (epochs // 10 if epochs >=10 else 1) == 0 or epoch == 0:
                 print(f"Epoch {epoch+1:4d}/{epochs}, Loss: {avg_loss:.5f}")
             if graphical:
@@ -356,11 +375,9 @@ class SequentialModel:
 
                 
         
-        self.final_pred = self.mlp.forward(X_train)
-        try:
-            self.final_loss = self.loss_func(y_train, self.final_pred)
-        except:
-            self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
+        self.final_pred = self.mlp.forward(X_train, training=False)
+        self.final_loss = self.loss_func(y_train, self.final_pred)
+
         if self.mlp.layers[-1].activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
         else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
         if graphical:
@@ -465,10 +482,8 @@ class SequentialModel:
         final_pred_train = self.fit(X_train=X_train, y_train=y_train, epochs=epochs, batch_size=batch_size, wd=wd, loss_function=loss_function, graphical=graphical, real_time=real_time, log_plot=log_plot)
         y_pred = self.predict(X_test=X_test)
         if test_loss:
-            try:
-                test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred)
-            except:
-                test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred, delta=self.delta)
+            test_loss_value = self.loss_func(y_true=y_test, y_pred=y_pred)
+
             if self.loss_func != losses.cross_entropy: print(f"\n'{loss_function}' loss function result of Test vs. Predicted: {test_loss_value:2g}")
             else: print(f"\n'cross-entropy' loss function result of Test vs. Predicted: {BE.xp.mean(test_loss_value):2g}")
         if scatter_comparison:
@@ -760,13 +775,19 @@ class CNN:
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
 
-        if layers_info[-1][2].lower() != "softmax":
+        """if layers_info[-1][2].lower() != "softmax":
             warnings.warn(
                 "The last layer of the CNN's MLP head does not use 'softmax'. "
                 "Cross-entropy loss expects probability distributions, so training may be unstable "
                 "or fail to converge. It is strongly recommended to use a softmax output for "
                 "multi-class classification.",
-                UserWarning)     
+                UserWarning)  """
+        if layers_info[-1][2].lower() != "softmax":
+            raise ValueError(
+                "The last layer of the CNN's MLP head does not use 'softmax'. "
+                "Cross-entropy loss expects probability distributions, so training may be unstable "
+                "or fail to converge. It is necessary to use a softmax output for "
+                "CNNs.")     
 
     class ConvolutionLayer:
 
@@ -1052,7 +1073,9 @@ class CNN:
             X_shuffled = X_train[idx]
             y_shuffled = y_train[idx]
             
-            tot_loss = 0
+            # tot_loss = 0
+
+            weighted_loss_total = 0.0
             
             # Process data in mini-batches
             for i in range(0, num_samples, batch_size):
@@ -1068,17 +1091,13 @@ class CNN:
 
                 y_pred = self.mlp.forward(batch_conv_outputs_flat)
                 
-                try:
-                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
-                except:
-                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
+                batch_loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
 
-                tot_loss += loss
+                # tot_loss += loss
+                actual_batch_size = y_batch.shape[0]
+                weighted_loss_total += batch_loss * actual_batch_size
                 
-                try:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
-                except:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
+                d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
 
                 d_mlp = self.mlp.backward(d_loss_wrt_pred=d_loss_wrt_pred)
 
@@ -1090,7 +1109,8 @@ class CNN:
                     self.optimizer.update(layer, wd=wd)                
                 
             # Average loss over all batches for reporting
-            avg_loss = tot_loss / num_batches
+            # avg_loss = tot_loss / num_batches
+            avg_loss = weighted_loss_total / num_samples
             if (epoch + 1) % (epochs // 10 if epochs >=10 else 1) == 0 or epoch == 0:
                 print(f"Epoch {epoch+1:4d}/{epochs}, Loss: {avg_loss:.5f}")
             if graphical:
@@ -1112,22 +1132,19 @@ class CNN:
             y_batch = y_train[i:i+batch_size]
             batch_conv_outputs_flat = []
             
-            conv_out = self.ConvolutionBlock(X=X_batch)
+            conv_out = self.ConvolutionBlock(X=X_batch, training=False)
 
             B = conv_out.shape[0]
             batch_conv_outputs_flat = conv_out.reshape(B, -1)
 
-            self.final_pred = self.mlp.forward(batch_conv_outputs_flat)
+            self.final_pred = self.mlp.forward(batch_conv_outputs_flat, training=False)
 
-            try:
-                self.final_loss += self.loss_func(y_batch, self.final_pred)
-            except:
-                self.final_loss += self.loss_func(y_batch, self.final_pred, self.delta)
-            
+            batch_loss = self.loss_func(y_batch, self.final_pred)
+            self.final_loss += batch_loss * y_batch.shape[0]
             y_final.append(self.final_pred)
 
         self.final_pred = BE.xp.concatenate(y_final, axis=0)
-        self.final_loss /= num_batches
+        self.final_loss /= num_samples
 
         print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
 
@@ -1482,8 +1499,20 @@ class RecurrentModel:
         self.layers = []
         self.learning_rate = None
         self.optimizer = None
-        self.rnn_type = rnn_type.lower()
-        
+        # self.rnn_type = rnn_type.lower()
+
+        if rnn_type is None:
+            self.rnn_type = "vanilla"
+        elif isinstance(rnn_type, str):
+            self.rnn_type = rnn_type.lower()
+        else:
+            raise TypeError("rnn_type must be 'vanilla', 'gru', 'lstm', or None.")
+        if self.rnn_type not in {"vanilla", "gru", "lstm"}:
+            raise ValueError(
+                f"Unknown rnn_type {rnn_type!r}; choose 'vanilla', 'gru', or 'lstm'."
+            )
+
+
         if gpu:
             if BE.gpu_available:
                 print("Computing on GPU")
@@ -1535,16 +1564,31 @@ class RecurrentModel:
         self.many_to_one = many_to_one
         self.optimizer = SGD(learning_rate=learning_rate)
 
-    def forward(self, X):
-        self.rnn.seq_len = X.shape[1]
+    def forward(self, X, training=True):
+        #self.rnn.seq_len = X.shape[1]
+        batch_size, seq_len, _ = X.shape
+        self.rnn.seq_len = seq_len
         H, cache = self.rnn.forward(X)
-        if self.many_to_one:
+        """ if self.many_to_one:
             out = self.dense.forward(H[:, -1, :])
         else:
-            out = self.dense.forward(H.reshape(-1, H.shape[-1]))
+            out = self.dense.forward(H.reshape(-1, H.shape[-1])) """
+
+        if self.many_to_one:
+            dense_input = H[:, -1, :]
+            out = self.dense.forward(dense_input, training=training)
+        else:
+            dense_input = H.reshape(batch_size * seq_len, self.rnn.hidden_dim)
+            output_flat = self.dense.forward(dense_input, training=training)
+            out = output_flat.reshape(
+                batch_size, seq_len, self.dense.num_neurons
+            )
+
+        #out = self.dense.forward(dense_input, training=training)
+
         return out, cache
 
-    def backward(self, dOut, cache):
+    """ def backward(self, dOut, cache):
         d_h_last = self.dense.backward(dOut)
         if self.many_to_one:
             d_H_full = BE.xp.zeros((cache["X"].shape[0], cache["X"].shape[1], self.rnn.hidden_dim))
@@ -1553,7 +1597,26 @@ class RecurrentModel:
         else:
             d_H_seq = d_h_last.reshape(cache["X"].shape[0], cache["X"].shape[1], -1)
             d_X = self.rnn.backward(d_H_seq, cache)
-        return d_X
+        return d_X """
+
+    def backward(self, dOut, cache):
+        batch_size, seq_len, _ = cache["X"].shape
+        output_dim = self.dense.num_neurons
+
+        if self.many_to_one:
+            d_hidden = self.dense.backward(dOut)
+            d_H = BE.xp.zeros(
+                (batch_size, seq_len, self.rnn.hidden_dim)
+            )
+            d_H[:, -1, :] = d_hidden
+        else:
+            dOut_flat = dOut.reshape(batch_size * seq_len, output_dim)
+            d_hidden_flat = self.dense.backward(dOut_flat)
+            d_H = d_hidden_flat.reshape(
+                batch_size, seq_len, self.rnn.hidden_dim
+            )
+
+        return self.rnn.backward(d_H, cache)
 
     def update(self, wd):
         # SGD update
@@ -1600,7 +1663,7 @@ class RecurrentModel:
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
 
-        try:
+        """ try:
             tmp = loss_function.split(sep=':')
             self.delta = float(tmp[1])
             loss_function = tmp[0]
@@ -1626,7 +1689,43 @@ class RecurrentModel:
             self.loss_func = losses.cross_entropy
             self.loss_gradient = losses.cross_entropy_der
         else:
-            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').")
+            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').") """
+
+
+        self.loss_func, self.loss_gradient, loss_name = (
+            losses.get_loss_functions(loss_function)
+        )
+
+        if self.dense.activation == "softmax":
+            if loss_name != "cross-entropy":
+                warnings.warn(
+                    "For softmax activation, cross-entropy is required. "
+                    "Switching to cross-entropy.",
+                    UserWarning,
+                )
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+            loss_name = "cross-entropy"
+        elif loss_name == "cross-entropy":
+            raise ValueError(
+                "Cross-entropy requires a softmax output activation."
+            )        
+
+        def prepare_loss_inputs(y_true, y_pred):
+            if y_true.shape != y_pred.shape:
+                raise ValueError(
+                    f"Target shape {y_true.shape} must match prediction shape "
+                    f"{y_pred.shape}."
+                )
+
+            if not self.many_to_one and loss_name == "cross-entropy":
+                batch_size, seq_len, output_dim = y_pred.shape
+                return (
+                    y_true.reshape(batch_size * seq_len, output_dim),
+                    y_pred.reshape(batch_size * seq_len, output_dim),
+                )
+
+            return y_true, y_pred
 
 
         if real_time == True and graphical == False:
@@ -1648,8 +1747,9 @@ class RecurrentModel:
             X_shuffled = X_train[idx]
             y_shuffled = y_train[idx]
             
-            tot_loss = 0
-            
+            # tot_loss = 0
+            weighted_loss_total = 0.0
+
             # Process data in mini-batches
             for i in range(0, num_samples, batch_size):
                 X_batch = X_shuffled[i:i+batch_size]
@@ -1657,24 +1757,39 @@ class RecurrentModel:
 
                 
                 y_pred, cache = self.forward(X_batch)
-                try:
-                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
-                except:
-                    loss = self.loss_func(y_true=y_batch, y_pred=y_pred, delta = self.delta)
+
+                """loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
 
                 tot_loss += BE.xp.mean(loss)
                 
-                try:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
-                except:
-                    d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred, delta=self.delta)
+                d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
+                
 
-                self.backward(dOut = d_loss_wrt_pred, cache=cache)
+                self.backward(dOut = d_loss_wrt_pred, cache=cache)"""
+
+                loss_targets, loss_predictions = prepare_loss_inputs(y_batch, y_pred)
+
+                batch_loss = self.loss_func(
+                    y_true=loss_targets,
+                    y_pred=loss_predictions,
+                )
+
+                # tot_loss += BE.xp.mean(loss)
+                actual_batch_size = y_batch.shape[0]
+                weighted_loss_total += batch_loss * actual_batch_size
+
+                d_loss_wrt_pred = self.loss_gradient(
+                    y_true=loss_targets,
+                    y_pred=loss_predictions,
+                )
+
+                self.backward(dOut=d_loss_wrt_pred, cache=cache)
     
                 self.update(wd = wd)
                 
             # Average loss over all batches for reporting
-            avg_loss = tot_loss / num_batches
+            # avg_loss = tot_loss / num_batches
+            avg_loss = weighted_loss_total / num_samples
             if (epoch + 1) % (epochs // 10 if epochs >=10 else 1) == 0 or epoch == 0:
                 print(f"Epoch {epoch+1:4d}/{epochs}, Loss: {avg_loss:.5f}")
             if graphical:
@@ -1688,11 +1803,12 @@ class RecurrentModel:
                 plt.ylabel("Average loss")
                 plt.pause(5e-3)
 
-        self.final_pred, cache = self.forward(X_train)
-        try:
-            self.final_loss = self.loss_func(y_train, self.final_pred)
-        except:
-            self.final_loss = self.loss_func(y_train, self.final_pred, self.delta)
+        self.final_pred, cache = self.forward(X_train, training=False)
+        loss_targets, loss_predictions = prepare_loss_inputs(y_train, self.final_pred)
+        
+        self.final_loss = self.loss_func(y_true=loss_targets, y_pred=loss_predictions)
+        #self.final_loss = self.loss_func(y_train, self.final_pred)
+
         if self.dense.activation == "softmax": print(f"\nFinal 'cross-entropy' loss on training data: {BE.xp.mean(self.final_loss):.5f}")
         else: print(f"\nFinal '{loss_function}' loss on training data: {self.final_loss:.5f}")
         if graphical:
@@ -1736,7 +1852,7 @@ class RecurrentModel:
         >>> X_test, y_test, c2i, i2c, vocab = generate_text_dataset(test_text, seq_len=4)
         >>> y_pred = model.predict(X_test)
         """
-        y_pred, cache = self.forward(X_test)
+        y_pred, cache = self.forward(X_test, training=False)
         return y_pred
     
     def save_weights(self, path):
@@ -1798,6 +1914,9 @@ class RecurrentModel:
                     }
             }
 
+        if self.rnn.normalization:
+            weights["rnn"]["rmsnorm_g"] = self.rnn.rmsnorm.g.copy()    
+
         if path == None:
             return weights
         else:
@@ -1844,6 +1963,9 @@ class RecurrentModel:
             self.rnn.weights_xh = weights['rnn']['Wx']
             self.rnn.weights_hh = weights['rnn']['Wh']
             self.rnn.biases_h = weights['rnn']['bh']
+
+        if self.rnn.normalization and "rmsnorm_g" in weights["rnn"]:
+            self.rnn.rmsnorm.g = BE.xp.asarray(weights["rnn"]["rmsnorm_g"])
 
     
     def save_model(self, path = "RNN_model.pickle"):
@@ -1983,7 +2105,7 @@ class CrossTrainingSequentialModel:
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
 
-        try:
+        """ try:
             tmp = loss_function.split(sep=':')
             self.delta = float(tmp[1])
             loss_function = tmp[0]
@@ -2006,7 +2128,26 @@ class CrossTrainingSequentialModel:
             self.loss_func = losses.cross_entropy
             self.loss_gradient = losses.cross_entropy_der
         else:
-            raise ValueError(f"Loss function '{loss_function}' not found.")
+            raise ValueError(f"Loss function '{loss_function}' not found.") """
+
+        self.loss_func, self.loss_gradient, loss_name = (
+            losses.get_loss_functions(loss_function)
+        )
+
+        if self.model1.layers[-1].activation == "softmax":
+            if loss_name != "cross-entropy":
+                warnings.warn(
+                    "For softmax activation, cross-entropy is required. "
+                    "Switching to cross-entropy.",
+                    UserWarning,
+                )
+            self.loss_func = losses.cross_entropy
+            self.loss_gradient = losses.cross_entropy_der
+            loss_name = "cross-entropy"
+        elif loss_name == "cross-entropy":
+            raise ValueError(
+                "Cross-entropy requires a softmax output activation."
+            )          
 
         # Graphical setup
         if real_time and not graphical:
@@ -2030,9 +2171,11 @@ class CrossTrainingSequentialModel:
             X_shuffled = X_train[idx]
             y_shuffled = y_train[idx]
 
-            tot_loss = 0
+            # tot_loss = 0
             tot_loss1 = 0
             tot_loss2 = 0
+
+            weighted_loss_total = 0.0
 
             for i in range(0, num_samples, batch_size):
 
@@ -2049,17 +2192,16 @@ class CrossTrainingSequentialModel:
                     loss1 = self.loss_func(y_true=y_batch, y_pred=y1)
                     loss2 = self.loss_func(y_true=y_batch, y_pred=y2)
 
-                    tot_loss += BE.xp.mean(loss1 + loss2) * 0.5
+                    # tot_loss += BE.xp.mean(loss1 + loss2) * 0.5
+                    actual_batch_size = y_batch.shape[0]
+                    tot_loss1 += loss1 * actual_batch_size
+                    tot_loss2 += loss2 * actual_batch_size
 
-                    tot_loss1 += BE.xp.mean(loss1)
-                    tot_loss2 += BE.xp.mean(loss1)
+                    batch_loss = 0.5 * (loss1 + loss2)
+                    weighted_loss_total += batch_loss * y_batch.shape[0]
 
-                    try:
-                        d1 = self.loss_gradient(y_true=y_batch, y_pred=y1)
-                        d2 = self.loss_gradient(y_true=y_batch, y_pred=y2)
-                    except:
-                        d1 = self.loss_gradient(y_true=y_batch, y_pred=y1, delta = self.delta)
-                        d2 = self.loss_gradient(y_true=y_batch, y_pred=y2, delta = self.delta)
+                    d1 = self.loss_gradient(y_true=y_batch, y_pred=y1)
+                    d2 = self.loss_gradient(y_true=y_batch, y_pred=y2)
 
                     self.model1.backward(d1)
                     self.model2.backward(d2)
@@ -2080,12 +2222,8 @@ class CrossTrainingSequentialModel:
                         y1_cross = self.model1.forward(X_batch)
                         y2_cross = self.model2.forward(X_batch)
 
-                        try:
-                            d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross)
-                            d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross)
-                        except:
-                            d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross, delta=self.delta)
-                            d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross, delta=self.delta)
+                        d1_cross = self.loss_gradient(y_true=y_batch, y_pred=y1_cross)
+                        d2_cross = self.loss_gradient(y_true=y_batch, y_pred=y2_cross)
 
                         self.model1.backward(d1_cross)
                         self.model2.backward(d2_cross)
@@ -2102,10 +2240,8 @@ class CrossTrainingSequentialModel:
                     def forward_backward(model, Xb, yb):
                         y = model.forward(Xb)
                         loss = self.loss_func(y_true=yb, y_pred=y)
-                        try:
-                            d = self.loss_gradient(y_true=yb, y_pred=y)
-                        except:
-                            d = self.loss_gradient(y_true=yb, y_pred=y, delta=self.delta)
+                        d = self.loss_gradient(y_true=yb, y_pred=y)
+
                         model.backward(d)
                         return loss, [layer.weights.copy() for layer in model.layers]
 
@@ -2115,9 +2251,13 @@ class CrossTrainingSequentialModel:
                     loss1, tmp_w1 = f1.result()
                     loss2, tmp_w2 = f2.result()
 
-                    tot_loss += BE.xp.mean(loss1 + loss2) * 0.5
-                    tot_loss1 += BE.xp.mean(loss1)
-                    tot_loss2 += BE.xp.mean(loss1)
+                    # tot_loss += BE.xp.mean(loss1 + loss2) * 0.5
+                    actual_batch_size = y_batch.shape[0]
+                    tot_loss1 += loss1 * actual_batch_size
+                    tot_loss2 += loss2 * actual_batch_size
+
+                    batch_loss = 0.5 * (loss1 + loss2)
+                    weighted_loss_total += batch_loss * y_batch.shape[0]                    
 
                     if epoch < thr_epoch:
                         wd_tmp = 0
@@ -2128,10 +2268,8 @@ class CrossTrainingSequentialModel:
 
                         def forward_backward_cross(model, Xb, yb):
                             y = model.forward(Xb)
-                            try:
-                                d = self.loss_gradient(y_true=yb, y_pred=y)
-                            except:
-                                d = self.loss_gradient(y_true=yb, y_pred=y, delta=self.delta)
+                            d = self.loss_gradient(y_true=yb, y_pred=y)
+
                             model.backward(d)
                             return None
 
@@ -2152,7 +2290,9 @@ class CrossTrainingSequentialModel:
                     u1.result()
                     u2.result()
 
-            avg_loss = tot_loss / num_batches
+            #avg_loss = tot_loss / num_batches
+
+            avg_loss = weighted_loss_total / num_samples
 
             if (epoch + 1) % (epochs // 10 if epochs >= 10 else 1) == 0 or epoch == 0:
                 print(f"Epoch {epoch+1}/{epochs}, Average loss: {avg_loss:.5f}")
@@ -2169,11 +2309,14 @@ class CrossTrainingSequentialModel:
                 plt.title(f"Cross-Training Loss (epoch {epoch})")
                 plt.pause(5e-3)
 
-        if tot_loss1 <= tot_loss2:
-            self.final_pred = self.model1.forward(X_train)
+        test_model1 = self.model1.forward(X_train, training=False)
+        test_model2 = self.model2.forward(X_train, training=False)
+        if self.loss_func(y_train, test_model1) < self.loss_func(y_train, test_model2):
+        #if tot_loss1 <= tot_loss2:
+            self.final_pred = test_model1
             self.best_model = self.model1
         else:
-            self.final_pred = self.model2.forward(X_train)
+            self.final_pred = test_model2
             self.best_model = self.model2
 
         self.final_loss = self.loss_func(y_true=y_train, y_pred=self.final_pred)
