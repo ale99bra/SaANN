@@ -7,6 +7,8 @@ from saann.finance.features import HARFeatures
 from saann.finance.targets import ForwardVolatilityTarget
 from saann.finance.sequence import SequenceBuilder
 from saann.finance.datasets import VolatilityDataset
+from saann.finance import metrics as mtr
+from saann.models import RecurrentModel
 
 from saann.finance.metrics import (
     rmspe,
@@ -309,6 +311,45 @@ class TestFinance(unittest.TestCase):
                     f"{key} missing from report."
                 )
 
+    def TestLSTMVolatilityTraining(self):
+
+        dataset = VolatilityDataset()
+        X_train, X_test, y_train, y_test = dataset.prepare(self.df)
+        model = RecurrentModel(
+        rnn_type="lstm"
+        )
+        model.construct(
+            input_dim=X_train.shape[2],
+            hidden_dim=4,
+            output_dim=1,
+            learning_rate=1e-3,
+            activation_function="softplus",  # Now operates in active gradient regime
+            init_function="xavier",
+            act_function_rnn="tanh",
+            many_to_one=True,
+            normalization=False
+        )
+
+        model.fit(
+            X_train, y_train,
+            epochs=2,
+            batch_size=16,
+            wd=1e-5,
+            loss_function="qlike"
+        )
+
+        pred = model.predict(X_test)
+
+        report = mtr.volatility_report(
+            y_test,
+            pred,
+            baseline=y_test,
+            verbose=True,
+            graphical=True
+        )
+
+        assert pred.shape == y_test.shape
+        assert "QLIKE" in report
 
 if __name__ == "__main__":
     unittest.main()
