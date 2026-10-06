@@ -246,7 +246,7 @@ class SequentialModel:
         :params epochs: *int* - Number of epochs\n
         :params batch_size: *int* - Size of each batch\n
         :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: *str* - Loss function to utilize during training ('mse', 'mae', 'cross-entropy', or 'huber' (or 'huber:delta' where delta is the hyperparameter. e.g. 'huber:1.3'))\n
+        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: *bool* - Display the Loss graph at the end of the fitting\n
         :params real_time: *bool* - Display the Loss graph in real time\n
@@ -426,7 +426,7 @@ class SequentialModel:
         :param epochs: *int* - Number of iterations for the training loop.\n
         :param batch_size: *int* - Size of the batches used in the training loop.\n
         :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: *str* - Loss function to utilize during training ('mse', 'mae', 'cross-entropy' or 'huber' (or 'huber:delta' where delta is the hyperparameter. e.g. 'huber:1.3'))\n
+        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
         :param split_test_percentage: *float* - Percentage of the total array size used to obtain the Test arrays.\n
         :param scaling: *str* - Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
         :param batch_norm: *bool* - Include batch normalization to the MLP architecture.\n
@@ -1634,7 +1634,7 @@ class RecurrentModel:
         :params batch_size: Size of each batch\n
         :params batch_size: Size of each batch\n
         :params wd: Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: Loss function to utilize during training ('MSE', 'MAE' or 'Huber' (or 'Huber:delta' where delta is the hyperparameter. e.g. 'Huber:1.3'))\n
+        :params loss_function: Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: Display the Loss graph at the end of the fitting\n
         :params real_time: Display the Loss graph in real time\n
@@ -2083,7 +2083,7 @@ class CrossTrainingSequentialModel:
         :params epochs: *int* - Number of epochs\n
         :params batch_size: *int* - Size of each batch\n
         :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: *str* - Loss function to utilize during training ('mse', 'mae', 'cross-entropy', or 'huber' (or 'huber:delta' where delta is the hyperparameter. e.g. 'huber:1.3'))\n
+        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: *bool* - Display the Loss graph at the end of the fitting\n
         :params real_time: *bool* - Display the Loss graph in real time\n
