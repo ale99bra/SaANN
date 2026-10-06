@@ -88,6 +88,9 @@ class DenseLayer:
         elif self.activation == "softmax":
             self.output = AF.softmax(raw_output)
             self.d_output = None
+        elif self.activation == "softplus":
+            self.output = AF.softplus(raw_output)
+            self.d_output = AF.softplus_der(self.output)
         elif self.activation == "linear":
             self.output = AF.linear(raw_output)
             self.d_output = AF.linear_der(self.output)
@@ -616,9 +619,6 @@ class GRULayer:
             #d_h = d_H[:, t, :] + d_h_next
             d_h_output = d_H[:, t, :]
 
-            """ if self.normalization:
-                x_t_norm_in, norm_t, rms_t = rms_x_list[t]
-                d_h = self.rmsnorm.backward(d_h, x_t_norm_in, norm_t, rms_t) """
             if self.normalization:
                 raw_h, norm_h, rms_h = rms_x_list[t]
                 d_h_output = self.rmsnorm.backward(
@@ -869,12 +869,6 @@ class LSTMLayer:
             i_t = i_list[t]
             o_t = o_list[t]
             c_tilde = c_tilde_list[t]
-
-            """ dh = dH[:, t, :] + dh_next
-
-            if self.normalization:
-                x_t_norm_in, norm_t, rms_t = rms_x_list[t]
-                dh = self.rmsnorm.backward(dh, x_t_norm_in, norm_t, rms_t) """
 
             d_h_output = dH[:, t, :]
 

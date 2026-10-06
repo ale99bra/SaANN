@@ -98,3 +98,16 @@ def linear_der(f):
     :f: Activated output.
     """
     return BE.xp.ones_like(f)
+
+def softplus(x):
+    """
+    Smooth approximation of ReLU: f(x) = ln(1 + exp(x))
+    Uses log-sum-exp trick for numerical stability with large positive x.
+    """
+    return BE.xp.where(x > 30.0, x, BE.xp.log1p(BE.xp.exp(x)))
+
+def softplus_der(f):
+    """
+    Derivative of Softplus w.r.t x is the Sigmoid function: f'(x) = 1 / (1 + exp(-x))
+    """
+    return 1.0 / (1.0 + BE.xp.exp(-f))

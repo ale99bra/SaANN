@@ -647,6 +647,14 @@ Coefficient of determination (R²).
 - `y_true` (array): Targets used for testing
 - `y_pred` (array): Predicted targets
 
+**`QLIKE(y_true, y_pred, eps)`**
+
+Calculates the Quasi-Likelihood (QLIKE) Loss.
+
+- `y_true` (array): Targets used for testing
+- `y_pred` (array): Predicted targets
+- `eps` (float): Epsilon clipping threshold for numerical stability
+
 ## Supported Activation Functions
 
 - **relu**: Rectified Linear Unit
@@ -654,6 +662,7 @@ Coefficient of determination (R²).
 - **tanh**: Hyperbolic tangent
 - **linear**: Linear activation (identity)
 - **softmax**: Softmax activation
+- **softplus**: Softplus activation
 
 ## Initialization Strategies
 

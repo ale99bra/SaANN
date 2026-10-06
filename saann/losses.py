@@ -95,7 +95,6 @@ def MSE_der(y_true, y_pred):
     :param y_true: Testing values array.
     :param y_pred: Array of values predicted by the model.
     """
-    # return 2 * (y_pred - y_true) / y_true.shape[0] #normalized by the size
     return 2 * (y_pred - y_true) / y_true.size
 
 def MAE(y_true, y_pred):
@@ -116,7 +115,6 @@ def MAE_der(y_true, y_pred):
     :param y_true: Testing values array.
     :param y_pred: Array of values predicted by the model.
     """
-    # return BE.xp.sign(y_pred - y_true) / y_true.shape[0]
     return BE.xp.sign(y_pred - y_true) / y_true.size
 
 def R2_score(y_true, y_pred):
@@ -161,13 +159,6 @@ def Huber_der(y_true, y_pred, delta = 1.0):
     :param y_pred: Array of values predicted by the model.
     :param delta: hyperparameter for defining the threshold - quadratic to linear
     """
-    """ diff = y_true - y_pred
-    quadratic_der = -diff
-    linear_der = -delta * BE.xp.sign(diff)
-    
-    score_der = BE.xp.mean(BE.xp.where(BE.xp.abs(diff) <= delta, quadratic_der, linear_der))
-
-    return score_der """
 
     error = y_pred - y_true
 
@@ -187,7 +178,6 @@ def cross_entropy(y_true, y_pred, epsilon=1e-12):
     :param y_pred: Array of values predicted by the model.
     """
     y_pred = BE.xp.clip(y_pred, epsilon, 1. - epsilon)
-    #return -BE.xp.sum(y_true * BE.xp.log(y_pred)) / y_true.shape[0]
     return -BE.xp.mean(BE.xp.sum(y_true * BE.xp.log(y_pred), axis=1))
 
 def cross_entropy_der(y_true, y_pred):
@@ -198,7 +188,6 @@ def cross_entropy_der(y_true, y_pred):
     :param y_true: Testing values array.
     :param y_pred: Array of values predicted by the model.
     """
-    # return (y_pred - y_true)
     return (y_pred - y_true) / y_true.shape[0]
 
 def cross_entropy_logits(logits, target_ids):

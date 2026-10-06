@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="saann",
-    version="0.3.1",
+    version="0.3.2",
     author="Alessio Branda",
     description="Self-automated Artificial Neural Network: a from-scratch implementation of an ANN with multi-layer perceptron architecture, now with CNN and RNNs, Transformer and GPU acceleration",
     long_description=long_description,

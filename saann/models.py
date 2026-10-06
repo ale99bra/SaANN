@@ -246,7 +246,7 @@ class SequentialModel:
         :params epochs: *int* - Number of epochs\n
         :params batch_size: *int* - Size of each batch\n
         :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
+        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE:1e-6'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: *bool* - Display the Loss graph at the end of the fitting\n
         :params real_time: *bool* - Display the Loss graph in real time\n
@@ -266,32 +266,6 @@ class SequentialModel:
 
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
-
-        """ try:
-            tmp = loss_function.split(sep=':')
-            self.delta = float(tmp[1])
-            loss_function = tmp[0]
-        except:
-            loss_function = tmp[0]
-            self.delta = 1
-
-        if self.mlp.layers[-1].activation == "softmax":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-        elif loss_function.lower() == "mse":
-            self.loss_func = losses.MSE
-            self.loss_gradient = losses.MSE_der
-        elif loss_function.lower() == "mae":
-            self.loss_func = losses.MAE
-            self.loss_gradient = losses.MAE_der
-        elif loss_function.lower() == "huber":
-            self.loss_func = losses.Huber
-            self.loss_gradient = losses.Huber_der
-        elif loss_function.lower() == "cross-entropy":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-        else:
-            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE', 'Cross-entropy' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').") """
 
         self.loss_func, self.loss_gradient, loss_name = (
             losses.get_loss_functions(loss_function)
@@ -426,7 +400,7 @@ class SequentialModel:
         :param epochs: *int* - Number of iterations for the training loop.\n
         :param batch_size: *int* - Size of the batches used in the training loop.\n
         :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
+        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE:1e-6'))\n
         :param split_test_percentage: *float* - Percentage of the total array size used to obtain the Test arrays.\n
         :param scaling: *str* - Name of the scaling function to utilize (can be None): 'zscore', 'minmax', 'log', or 'mean'.\n
         :param batch_norm: *bool* - Include batch normalization to the MLP architecture.\n
@@ -723,23 +697,10 @@ class CNN:
                 raise ValueError(f"Parameter '{params_label[p]}' of the CNN class must be an integer.")
         
         try:
-            if activation_function.lower() not in ['sigmoid', 'relu', 'tanh', 'linear']:
-                raise ValueError(f"Activation function for convolution '{activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', or 'linear'.")
+            if activation_function.lower() not in ['sigmoid', 'relu', 'tanh', 'linear', 'softplus']:
+                raise ValueError(f"Activation function for convolution '{activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', 'linear' or 'softplus'.")
         except:
-            raise ValueError(f"Activation function for convolution '{activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', or 'linear'.")
-
-        """if self.init_function == "random":
-            self.weights = BE.xp.random.rand(self.num_filters, self.filter_size, self.filter_size, num_channels) * 0.01
-        elif self.init_function in ("xavier", "glorot"):
-            stddev = BE.xp.sqrt(2/(self.num_filters + num_channels))
-            self.weights = BE.xp.random.randn(self.num_filters, self.filter_size, self.filter_size, num_channels) * stddev
-        elif self.init_function in ("he", "kaiming"):
-            limit = BE.xp.sqrt(6/self.num_filters)
-            self.weights = BE.xp.random.uniform(-limit, limit, (self.num_filters, self.filter_size, self.filter_size, num_channels))
-        else:
-            raise ValueError(f"Initialization function '{self.init_function}' not found.\nPlease choose: 'random', 'xavier' or 'he'.")
-            
-        self.biases = BE.xp.random.rand(self.num_filters) * 0"""
+            raise ValueError(f"Activation function for convolution '{activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', 'linear' or 'softplus'.")
 
         self.conv1a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 1*num_filters, padding = padding, stride = stride, num_channels = num_channels, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
         self.conv2a = self.ConvolutionLayer(filter_size = filter_size, num_filters = 2*num_filters, padding = padding, stride = stride, num_channels = 1*num_filters, activation_function = activation_function, init_function = init_function, pool_size = pool_size)
@@ -775,13 +736,6 @@ class CNN:
         self.optimizer = SGD(learning_rate)
         self.learning_rate = learning_rate
 
-        """if layers_info[-1][2].lower() != "softmax":
-            warnings.warn(
-                "The last layer of the CNN's MLP head does not use 'softmax'. "
-                "Cross-entropy loss expects probability distributions, so training may be unstable "
-                "or fail to converge. It is strongly recommended to use a softmax output for "
-                "multi-class classification.",
-                UserWarning)  """
         if layers_info[-1][2].lower() != "softmax":
             raise ValueError(
                 "The last layer of the CNN's MLP head does not use 'softmax'. "
@@ -842,12 +796,14 @@ class CNN:
                 self.layer_conv = AF.sigmoid(layer_conv)
             elif self.activation_function == "relu":
                 self.layer_conv = AF.reLU(layer_conv)
+            elif self.activation_function == "softplus":
+                self.layer_conv = AF.softplus(layer_conv)
             elif self.activation_function == "linear":
                 self.layer_conv = AF.linear(layer_conv)
             elif self.activation_function == "tanh":
                 self.layer_conv = AF.tanh(layer_conv)
             else:
-                raise ValueError(f"Activation function for convolution'{self.activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', or 'linear'.")
+                raise ValueError(f"Activation function for convolution'{self.activation_function}' not found.\nPlease choose: 'sigmoid', 'relu', 'tanh', 'linear' or 'softplus'.")
             
             return self.layer_conv
 
@@ -872,6 +828,8 @@ class CNN:
                 d_act = AF.sigmoid_der(self.layer_conv) * d_out
             elif self.activation_function == "tanh":
                 d_act = AF.tanh_der(self.layer_conv) * d_out
+            elif self.activation_function == "softplus":
+                d_act = AF.softplus_der(self.layer_conv) * d_out
             else:
                 d_act = d_out  # linear
 
@@ -1569,10 +1527,6 @@ class RecurrentModel:
         batch_size, seq_len, _ = X.shape
         self.rnn.seq_len = seq_len
         H, cache = self.rnn.forward(X)
-        """ if self.many_to_one:
-            out = self.dense.forward(H[:, -1, :])
-        else:
-            out = self.dense.forward(H.reshape(-1, H.shape[-1])) """
 
         if self.many_to_one:
             dense_input = H[:, -1, :]
@@ -1587,17 +1541,6 @@ class RecurrentModel:
         #out = self.dense.forward(dense_input, training=training)
 
         return out, cache
-
-    """ def backward(self, dOut, cache):
-        d_h_last = self.dense.backward(dOut)
-        if self.many_to_one:
-            d_H_full = BE.xp.zeros((cache["X"].shape[0], cache["X"].shape[1], self.rnn.hidden_dim))
-            d_H_full[:, -1, :] = d_h_last
-            d_X = self.rnn.backward(d_H_full, cache)
-        else:
-            d_H_seq = d_h_last.reshape(cache["X"].shape[0], cache["X"].shape[1], -1)
-            d_X = self.rnn.backward(d_H_seq, cache)
-        return d_X """
 
     def backward(self, dOut, cache):
         batch_size, seq_len, _ = cache["X"].shape
@@ -1634,7 +1577,7 @@ class RecurrentModel:
         :params batch_size: Size of each batch\n
         :params batch_size: Size of each batch\n
         :params wd: Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
+        :params loss_function: Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE:1e-6'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: Display the Loss graph at the end of the fitting\n
         :params real_time: Display the Loss graph in real time\n
@@ -1662,35 +1605,6 @@ class RecurrentModel:
 
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
-
-        """ try:
-            tmp = loss_function.split(sep=':')
-            self.delta = float(tmp[1])
-            loss_function = tmp[0]
-        except:
-            loss_function = tmp[0]
-            self.delta = 1
-
-        if self.dense.activation == "softmax":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-            if loss_function.lower() != "cross-entropy":
-                warnings.warn("For 'softmax' activation, the 'cross-entropy loss function is required. Switch applied automatically.", UserWarning)
-        elif loss_function.lower() == "mse":
-            self.loss_func = losses.MSE
-            self.loss_gradient = losses.MSE_der
-        elif loss_function.lower() == "mae":
-            self.loss_func = losses.MAE
-            self.loss_gradient = losses.MAE_der
-        elif loss_function.lower() == "huber":
-            self.loss_func = losses.Huber
-            self.loss_gradient = losses.Huber_der
-        elif loss_function.lower() == "cross-entropy":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-        else:
-            raise ValueError(f"Loss function '{loss_function}' not found. Please input: 'MSE', 'MAE' or 'Huber' (or 'Huber:delta' e.g. 'Huber:1.3').") """
-
 
         self.loss_func, self.loss_gradient, loss_name = (
             losses.get_loss_functions(loss_function)
@@ -1757,15 +1671,6 @@ class RecurrentModel:
 
                 
                 y_pred, cache = self.forward(X_batch)
-
-                """loss = self.loss_func(y_true=y_batch, y_pred=y_pred)
-
-                tot_loss += BE.xp.mean(loss)
-                
-                d_loss_wrt_pred = self.loss_gradient(y_true=y_batch, y_pred=y_pred)
-                
-
-                self.backward(dOut = d_loss_wrt_pred, cache=cache)"""
 
                 loss_targets, loss_predictions = prepare_loss_inputs(y_batch, y_pred)
 
@@ -2083,7 +1988,7 @@ class CrossTrainingSequentialModel:
         :params epochs: *int* - Number of epochs\n
         :params batch_size: *int* - Size of each batch\n
         :params wd: *float* - Hyperparameter for the model regularization (weight decay)\n
-        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE1e-6'))\n
+        :params loss_function: *str* - Loss function to utilize during training ('MSE', 'MAE', 'cross-entropy', 'Huber' or 'QLIKE' ('Huber:delta'/'QLIKE:eps' where delta/eps is the hyperparameter. e.g. 'Huber:1.3'/'QLIKE:1e-6'))\n
             N.B.: for classification, the last layer should be "softmax" activated. This forces the loss function to be 'cross-entropy'.\n
         :params graphical: *bool* - Display the Loss graph at the end of the fitting\n
         :params real_time: *bool* - Display the Loss graph in real time\n
@@ -2104,31 +2009,6 @@ class CrossTrainingSequentialModel:
 
         num_samples = X_train.shape[0]
         num_batches = (num_samples + batch_size - 1) // batch_size
-
-        """ try:
-            tmp = loss_function.split(sep=':')
-            self.delta = float(tmp[1])
-            loss_function = tmp[0]
-        except:
-            self.delta = 1
-
-        if self.model1.layers[-1].activation == "softmax":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-        elif loss_function.lower() == "mse":
-            self.loss_func = losses.MSE
-            self.loss_gradient = losses.MSE_der
-        elif loss_function.lower() == "mae":
-            self.loss_func = losses.MAE
-            self.loss_gradient = losses.MAE_der
-        elif loss_function.lower() == "huber":
-            self.loss_func = losses.Huber
-            self.loss_gradient = losses.Huber_der
-        elif loss_function.lower() == "cross-entropy":
-            self.loss_func = losses.cross_entropy
-            self.loss_gradient = losses.cross_entropy_der
-        else:
-            raise ValueError(f"Loss function '{loss_function}' not found.") """
 
         self.loss_func, self.loss_gradient, loss_name = (
             losses.get_loss_functions(loss_function)
