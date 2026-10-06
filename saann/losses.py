@@ -14,14 +14,14 @@ def get_loss_functions(loss_spec):
     parts = loss_spec.split(":")
     if len(parts) > 2:
         raise ValueError(
-            f"Invalid loss specification {loss_spec!r}; expected 'Huber' or 'Huber:delta'."
+            f"Invalid loss specification {loss_spec!r}; expected 'Huber', 'Huber:delta', or 'QLIKE:eps'."
         )
 
     name = parts[0].strip().lower()
-    has_delta = len(parts) == 2
+    has_param = len(parts) == 2
 
     if name == "huber":
-        if has_delta:
+        if has_param:
             try:
                 delta = float(parts[1])
             except ValueError as exc:
@@ -40,8 +40,28 @@ def get_loss_functions(loss_spec):
             name,
         )
 
-    if has_delta:
-        raise ValueError(f"Only Huber accepts a delta suffix; got {loss_spec!r}.")
+    if name == "qlike":
+        if has_param:
+            try:
+                eps = float(parts[1])
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid QLIKE epsilon {parts[1]!r}; expected a finite positive number."
+                ) from exc
+        else:
+            eps = 1e-8
+
+        if not math.isfinite(eps) or eps <= 0:
+            raise ValueError("QLIKE epsilon must be a finite positive number.")
+
+        return (
+            partial(QLIKE, eps=eps),
+            partial(QLIKE_der, eps=eps),
+            name,
+        )
+
+    if has_param:
+        raise ValueError(f"Only 'Huber' and 'QLIKE' accept parameter suffixes; got {loss_spec!r}.")
 
     functions = {
         "mse": (MSE, MSE_der),
@@ -256,6 +276,48 @@ def cross_entropy_logits_with_grad(logits, target_ids):
     grad_logits = probs / (B * L)
 
     return loss, grad_logits.reshape(B, L, V)
+
+def QLIKE(y_true, y_pred, eps=1e-8):
+    """
+    Calculates the Quasi-Likelihood (QLIKE) Loss.
+    
+    Formula: L(y, y_hat) = (y / y_hat) - ln(y / y_hat) - 1
+    
+    Parameters
+    ----------
+    :param y_true: Testing values array (Actual Volatility Variance or StDev).
+    :param y_pred: Array of values predicted by the model.
+    :param eps: Epsilon clipping threshold for numerical stability.
+    """
+    # Clip predictions and targets to prevent log(0) or division by zero
+    y_pred_safe = BE.xp.clip(y_pred, eps, None)
+    y_true_safe = BE.xp.clip(y_true, eps, None)
+    
+    ratio = y_true_safe / y_pred_safe
+    return BE.xp.mean(ratio - BE.xp.log(ratio) - 1.0)
+
+
+def QLIKE_der(y_true, y_pred, eps=1e-8):
+    """
+    Derivative of the QLIKE loss w.r.t. y_pred.
+    
+    Formula: dL/dy_hat = (y_hat - y) / (y_hat^2)
+    Normalized across total elements (y_true.size).
+    
+    Parameters
+    ----------
+    :param y_true: Testing values array.
+    :param y_pred: Array of values predicted by the model.
+    :param eps: Epsilon clipping threshold for numerical stability.
+    """
+    y_pred_safe = BE.xp.clip(y_pred, eps, None)
+    y_true_safe = BE.xp.clip(y_true, eps, None)
+    
+    # Gradient w.r.t predictions
+    grad = (y_pred_safe - y_true_safe) / (y_pred_safe ** 2)
+    
+    # Normalize by total number of elements matching SaANN's convention
+    return grad / y_true.size
 
 if __name__ == "__main__":
     pred = BE.xp.linspace(0, 100, num = 26)
