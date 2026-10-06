@@ -171,7 +171,9 @@ def volatility_report(
     y_true,
     y_pred,
     baseline=None,
-    horizon_step=None
+    horizon_step=None,
+    verbose = False,
+    graphical = False
 ):
     """
     Standard volatility forecasting report.
@@ -242,5 +244,33 @@ def volatility_report(
             y_pred,
             horizon_step
         )
+
+    if verbose:
+        print("\n---------------EVALUATION METRICS---------------")
+        print(f"Test MSE:                          {report["MSE"]:.4g}")
+        print(f"Test MAE:                          {report["MAE"]:.4g}")
+        print(f"Test MAPE:                         {report["MAPE"]:.4g}")
+        print(f"Test MASE:                         {report["MASE"]:.4g}")
+        print(f"Test R2 Score:                     {report["R2"]:.4g}")
+        print(f"QLIKE Loss:                        {report["QLIKE"]:.4g}")
+        print(f"RMSPE:                             {report["RMSPE"]:.2g}%")
+        if baseline is not None: print(f"Directional Accuracy:              {report['Directional Accuracy']:.2g}%")
+        if horizon_step is not None: print(f"Horizon Directional Accuracy:      {report['Horizon Directional Accuracy']:.2g}%")
+        print("------------------------------------------------")
+
+    if graphical:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(7, 6))
+        plt.scatter(y_pred, y_true, alpha=0.5, color='royalblue')
+        plt.plot(
+            [y_true.min(), y_true.max()], 
+            [y_true.min(), y_true.max()], 
+            linestyle="--", color="red", label="Ideal Line"
+        )
+        plt.xlabel("Predicted Volatility")
+        plt.ylabel("Actual Volatility")
+        plt.title(f"Actual vs. Predicted Volatility")
+        plt.legend()
+        plt.show()
 
     return report
