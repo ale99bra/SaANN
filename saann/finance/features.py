@@ -1,3 +1,7 @@
+# features.py
+# Copyright (c) 2026 Alessio Branda
+# Licensed under the MIT License
+
 import pandas as pd
 from .. import backend as BE
 

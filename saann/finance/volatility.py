@@ -1,3 +1,7 @@
+# volatility.py
+# Copyright (c) 2026 Alessio Branda
+# Licensed under the MIT License
+
 from abc import ABC, abstractmethod
 from .. import backend as BE
 

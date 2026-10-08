@@ -1,3 +1,7 @@
+# datasets.py
+# Copyright (c) 2026 Alessio Branda
+# Licensed under the MIT License
+
 from .volatility import ParkinsonVolatility
 from .features import HARFeatures
 from .targets import ForwardVolatilityTarget
