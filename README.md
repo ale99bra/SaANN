@@ -6,9 +6,27 @@
 
 An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN provides transparent implementations of MLPs, CNNs and RNNs, with optional GPU acceleration and comprehensive metrics for learning and experimentation.
 
-*Major update*: VERSION 0.3.0
-- Added experimental feature: Cross‑Training MLPs — training of two parallel MLPs as a way to regularize early training
-- Added TransformerModel — see [docs/features.md](docs/features.md#-transformermodel-gptstyle-decoderonly-transformer)
+*New module*: VERSION 0.4.0
+
+SaANN now includes a lightweight quantitative `finance` module focused on volatility forecasting.
+## Features
+- Parkinson volatility estimation
+- HAR feature generation
+- Forward realized volatility targets
+- Automatic train/test split
+- Automatic feature scaling
+- Sequence generation for RNNs
+- Financial forecasting metrics
+- Supported Metrics
+    - QLIKE
+    - RMSPE
+    - MAPE
+    - MASE
+    - Directional Accuracy
+    - Horizon Directional Accuracy
+    - Example
+
+[See Finance](docs/finance.md) for more.
 
 **⚠️ Important**: SaANN is designed for personal learning, not production. This project was created as an exercise to deepen my understanding of neural networks. While others are welcome to explore or use it, its primary purpose is educational for myself.
 
@@ -21,6 +39,7 @@ Full documentation lives in [`docs/`](docs/):
 - [API Reference](docs/api-reference.md) — Full method-by-method documentation
 - [Architecture](docs/architecture.md) — Project structure and design overview
 - [Features](docs/features.md) — Core architecture, MLP, CNN, RNN, Transformer, Cross-Training, metrics
+- [Finance](docs/finance.md) — New finance module 
 
 
 ## Installation
@@ -59,6 +78,8 @@ See the `examples/` directory for complete working notebooks:
 - `automatic_diabetes_dataset_example.ipynb`: Automatic MLP workflow
 - `XOR_example.ipynb`: Non-linearity testing
 - `flower_cnn_example.ipynb`: CNN training and evaluation with metrics
+- `EO_cnn_example.ipynb`: CNN training on EO dataset
+- `transformer_dummy_example.ipynb`: Transfromer model example
 
 ## Contributing
 
