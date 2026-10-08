@@ -23,6 +23,14 @@ SaANN/
     ├── backend.py                                  # NumPy/CuPy backend abstraction
     ├── tokenizer.py                                # Tokenizers for Transformer
     ├── training.py                                 # Training functions for Transformer
+    └── finance/
+        ├──__init__.py
+        ├── datasets.py                             # Dataset preparation for RNN training
+        ├── features.py                             # Volatility features
+        ├── metrics.py                              # Metrics for evaluation
+        ├── sequence.py                             # Sequence builder
+        ├── targets.py                              # Forward realised volatility target
+        └── volatility.py                           # Volatility estimator
     └── transformer/
         ├──__init__.py
         ├── attention.py                            # Attention algorithm
@@ -44,14 +52,17 @@ SaANN/
 └── tests/
     ├── __init__.py
     ├── test_activations.py                         # Test script for activation functions
+    ├── test_finance.py                             # Test script for finance module
     ├── test_layers.py                              # Test script for layer classes
+    ├── test_metrics.py                             # Test script for metrics
     ├── test_models.py                              # Test script for model classes
-    └── test_metrics.py                             # Test script for metrics
+    └── test_transformer.py                         # Test script for transformer classes
 │
 └── docs/
     ├── api-reference.md                            # API documentation
     ├── architecture.md                             # This file
     ├── features.md                                 # Rundown of the models
+    ├── finance.md                                  # Rundown of the finance module
     ├── installation.md                             # Installation guide
     └── quickstart.md                               # Get started guide
 ```
@@ -66,6 +77,7 @@ SaANN implements:
 - **Transformer**
 - **Training**: Configurable optimizers, learning rates, regularization
 - **Backend**: Transparent NumPy/CuPy switching
+- **Financial Forecasting Module**: Volatility estimation, HAR feature engineering, Sequence generation, Forecasting metrics, RNN ready datasets
 
 ## Performance Considerations
 

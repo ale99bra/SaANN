@@ -655,6 +655,405 @@ Calculates the Quasi-Likelihood (QLIKE) Loss.
 - `y_pred` (array): Predicted targets
 - `eps` (float): Epsilon clipping threshold for numerical stability
 
+## Finance
+
+SaANN includes an experimental finance module designed for volatility forecasting and financial time-series modelling.
+
+The finance module provides volatility estimation, HAR feature engineering, sequence generation for recurrent networks, financial forecasting metrics, and an automated dataset preparation pipeline.
+
+### VolatilityDataset
+
+Complete preprocessing workflow for volatility forecasting.
+
+#### Methods
+
+**`__init__(estimator, feature_builder, target_builder, sequence_builder, test_size)`**
+
+Initialize a volatility forecasting dataset.
+
+- `estimator` (class): Volatility estimator class
+- `feature_builder` (class): Feature generation class
+- `target_builder` (class): Forward target generator class
+- `sequence_builder` (class): Sequence generation class
+- `test_size` (float): Fraction of samples to reserve for testing
+
+Default components:
+
+- ParkinsonVolatility
+- HARFeatures
+- ForwardVolatilityTarget
+- SequenceBuilder
+
+
+**`prepare(df)`**
+
+Prepare OHLCV market data for forecasting.
+
+- `df` (DataFrame): Pandas DataFrame containing financial data
+
+Required columns:
+
+- High
+- Low
+
+Optional columns:
+
+- Open
+- Close
+- Volume
+
+Returns:
+
+```python
+(
+    X_train,
+    X_test,
+    y_train,
+    y_test
+)
+```
+
+Pipeline:
+
+```text
+OHLCV DataFrame
+        ↓
+Volatility Estimation
+        ↓
+HAR Feature Generation
+        ↓
+Forward Target Generation
+        ↓
+Sequence Generation
+        ↓
+Train/Test Split
+        ↓
+Feature Scaling
+```
+
+### ParkinsonVolatility
+
+Parkinson high-low volatility estimator.
+
+#### Methods
+
+**`transform(df)`**
+
+Compute volatility from OHLC market data.
+
+Parameters:
+
+- `df` (DataFrame)
+
+Returns:
+
+```python
+volatility
+```
+
+Output shape:
+
+```python
+(len(df),)
+```
+
+The Parkinson estimator uses daily high-low ranges to estimate realized volatility.
+
+### HARFeatures
+
+Generate Heterogeneous Auto-Regressive (HAR) volatility features.
+
+#### Methods
+
+**`__init__(daily_window, weekly_window, monthly_window)`**
+
+Initialize the HAR feature generator.
+
+Parameters:
+
+- `daily_window` (int): Daily volatility window. Default = 1
+- `weekly_window` (int): Weekly volatility window. Default = 5
+- `monthly_window` (int): Monthly volatility window. Default = 22
+
+**`transform(volatility)`**
+
+Generate HAR volatility features.
+
+Parameters:
+
+- `volatility` (array)
+
+Returns:
+
+```python
+X
+```
+
+Output shape:
+
+```python
+(samples, 3)
+```
+
+Generated features:
+
+```text
+RV_daily
+RV_weekly
+RV_monthly
+```
+
+### ForwardVolatilityTarget
+
+Create forward realized volatility forecasting targets.
+
+#### Methods
+
+**`__init__(horizon, aggregation)`**
+
+Initialize the target generator.
+
+Parameters:
+
+- `horizon` (int): Forecast horizon. Default = 5
+- `aggregation` (str): Aggregation method
+
+Supported aggregations:
+
+- "mean"
+- "max"
+- "median"
+
+**`transform(volatility)`**
+
+Generate forecasting targets.
+
+Parameters:
+
+- `volatility` (array)
+
+Returns:
+
+```python
+y
+```
+
+Output shape:
+
+```python
+(samples,)
+```
+
+Targets are constructed strictly from future observations.
+
+Forecast alignment:
+
+```text
+Input:
+[t-lookback+1 ... t]
+
+Target:
+[t+1 ... t+horizon]
+```
+
+This prevents look-ahead bias and leakage.
+
+### SequenceBuilder
+
+Convert financial features into recurrent model sequences.
+
+#### Methods
+
+**`__init__(lookback)`**
+
+Initialize the sequence generator.
+
+Parameters:
+
+- `lookback` (int): Number of timesteps used as model input
+
+
+**`build(features, target)`**
+
+Generate sequence tensors.
+
+Parameters:
+
+- `features` (array)
+- `target` (array)
+
+Returns:
+
+```python
+(
+    X,
+    y
+)
+```
+
+Output shapes:
+
+```python
+X.shape == (
+    samples,
+    lookback,
+    features
+)
+
+y.shape == (
+    samples,
+    1
+)
+```
+
+The resulting tensors are directly compatible with:
+
+- RecurrentModel(rnn_type=None)
+- RecurrentModel(rnn_type="gru")
+- RecurrentModel(rnn_type="lstm")
+
+
+### Finance Metrics
+
+The finance module extends SaANN's existing loss functions with forecasting-specific evaluation metrics.
+
+The following standard losses remain available through:
+
+```python
+from saann.losses import (
+    MSE,
+    MAE,
+    R2_score,
+    QLIKE
+)
+```
+
+Additional finance-specific metrics are provided through:
+
+```python
+from saann.finance import metrics
+```
+
+**`rmspe(y_true, y_pred)`**
+
+Root Mean Squared Percentage Error.
+
+Parameters:
+
+- y_true (array)
+- y_pred (array)
+
+Returns:
+
+```python
+float
+```
+
+Output is expressed as a percentage (%).
+
+---
+
+**`mape(y_true, y_pred)`**
+
+Mean Absolute Percentage Error.
+
+Parameters:
+
+- `y_true` (array)
+- `y_pred` (array)
+
+Returns:
+
+```python
+float
+```
+
+Output is expressed as a percentage (%).
+
+---
+
+**`mase(y_true, y_pred)`**
+
+Mean Absolute Scaled Error.
+
+Parameters:
+
+- `y_true` (array)
+- `y_pred` (array)
+
+Returns:
+
+```python
+float
+```
+
+Interpretation:
+
+```text
+MASE < 1 → Better than naive forecast
+MASE > 1 → Worse than naive forecast
+```
+
+---
+
+**`directional_accuracy(y_true, y_pred, baseline=None)`**
+
+Measure the directional forecasting performance of the model.
+
+Parameters:
+
+- `y_true` (array)
+- `y_pred` (array)
+- `baseline` (array): Optional comparison series
+
+Returns:
+
+```python
+float
+```
+
+Output is expressed as a percentage (%).
+
+---
+
+**`horizon_directional_accuracy(y_true, y_pred, step=5)`**
+
+Measure directional accuracy using non-overlapping horizons.
+
+Parameters:
+
+- `y_true` (array)
+- `y_pred` (array)
+- `step` (int)
+
+Returns:
+
+```python
+float
+```
+
+Output is expressed as a percentage (%).
+
+---
+
+**`volatility_report(y_true, y_pred, baseline=None, verbose=False, graphical=False)`**
+
+Generate a volatility forecasting report.
+
+Parameters:
+
+- `y_true` (array)
+- `y_pred` (array)
+- `baseline` (array): Optional benchmark series
+- `verbose` (bool): Print report to console
+- `graphical` (bool): Generate visual diagnostics
+
+Returns:
+
+```python
+dict
+```
+
 ## Supported Activation Functions
 
 - **relu**: Rectified Linear Unit

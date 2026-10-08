@@ -172,6 +172,29 @@ Across 3 full runs:
 
 These results are in line with typical MLP performance on the diabetes dataset (usually R² ≈ 0.45–0.55), confirming that Cross‑Training is functional and stable.
 
+## 📈 Financial Forecasting — Experimental
+
+SaANN includes a lightweight quantitative finance module focused on volatility forecasting.
+
+### ✨ Features
+- Parkinson volatility estimation
+- HAR feature generation
+- Forward realized volatility targets
+- Automatic train/test split
+- Automatic feature scaling
+- Sequence generation for RNNs
+- Financial forecasting metrics
+- Supported Metrics
+    - QLIKE
+    - RMSPE
+    - MAPE
+    - MASE
+    - Directional Accuracy
+    - Horizon Directional Accuracy
+    - Example
+
+[See Finance](finance.md) for more.
+
 ## 💾 Model Management
 
 - `save_model(path)`: Save models in portable format
