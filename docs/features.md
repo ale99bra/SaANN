@@ -191,7 +191,6 @@ SaANN includes a lightweight quantitative finance module focused on volatility f
     - MASE
     - Directional Accuracy
     - Horizon Directional Accuracy
-    - Example
 
 [See Finance](finance.md) for more.
 

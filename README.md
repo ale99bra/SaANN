@@ -8,25 +8,22 @@ An educational deep-learning framework built from scratch with NumPy/CuPy. SaANN
 
 *New module*: VERSION 0.4.0
 
-SaANN now includes a lightweight quantitative `finance` module focused on volatility forecasting.
-## Features
-- Parkinson volatility estimation
-- HAR feature generation
-- Forward realized volatility targets
-- Automatic train/test split
-- Automatic feature scaling
-- Sequence generation for RNNs
-- Financial forecasting metrics
-- Supported Metrics
-    - QLIKE
-    - RMSPE
-    - MAPE
-    - MASE
-    - Directional Accuracy
-    - Horizon Directional Accuracy
-    - Example
-
-[See Finance](docs/finance.md) for more.
+SaANN now includes a lightweight quantitative `finance` module focused on volatility forecasting (see [finance](docs/finance.md) for more).
+### Features
+    - Parkinson volatility estimation
+    - HAR feature generation
+    - Forward realized volatility targets
+    - Automatic train/test split
+    - Automatic feature scaling
+    - Sequence generation for RNNs
+    - Financial forecasting metrics
+    - Supported Metrics
+        - QLIKE
+        - RMSPE
+        - MAPE
+        - MASE
+        - Directional Accuracy
+        - Horizon Directional Accuracy
 
 **⚠️ Important**: SaANN is designed for personal learning, not production. This project was created as an exercise to deepen my understanding of neural networks. While others are welcome to explore or use it, its primary purpose is educational for myself.
 
