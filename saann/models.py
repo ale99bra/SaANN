@@ -14,8 +14,8 @@ from . import activation_functions as AF
 from . import initiations as In
 from . import backend as BE
 
-VERSION = "0.3.1"
-LIST_VERSIONS_COMPATIBLE = ["0.2.7", "0.3.0", VERSION]
+VERSION = "0.4.0"
+LIST_VERSIONS_COMPATIBLE = ["0.2.7", "0.3.0", "0.3.1", "0.3.2", VERSION]
 
 def im2col(X, K, stride, padding):
     B, H, W, C = X.shape
@@ -85,7 +85,7 @@ def load_model_all(model_file):
     except ImportError as e:
         raise ValueError("Couldn't load model:", e)    
 
-def save_model_all(model, model_file_name = "model.pickle", weights_only = False, clear_cache = False):
+def save_model_all(model, model_file_name = "model.saann", weights_only = False, clear_cache = False):
     dummy_1 = type(CNN())
     dummy_2 = type(SequentialModel())
     try:
@@ -505,7 +505,7 @@ class SequentialModel:
             layer.weights = saved["W"]
             layer.biases = saved["b"]
     
-    def save_model(self, path = "model.pickle"):
+    def save_model(self, path = "model.saann"):
         """
         Save the model's architecture and weights in a pickle file
         
@@ -1384,7 +1384,7 @@ class CNN:
             layer.weights = saved["W"]
             layer.biases = saved["b"]
 
-    def save_model(self, path = "model_CNN.pickle"):
+    def save_model(self, path = "model_CNN.saann"):
         """
         Save the model's architecture and weights in a pickle file
         
@@ -1873,7 +1873,7 @@ class RecurrentModel:
             self.rnn.rmsnorm.g = BE.xp.asarray(weights["rnn"]["rmsnorm_g"])
 
     
-    def save_model(self, path = "RNN_model.pickle"):
+    def save_model(self, path = "RNN_model.saann"):
         """
         Save the model's architecture and weights in a pickle file
         
@@ -2256,7 +2256,7 @@ class CrossTrainingSequentialModel:
             with open(path, "wb") as f:
                 pickle.dump(weights, f)
     
-    def save_model(self, path = "model.pickle"):
+    def save_model(self, path = "model.saann"):
         """
         Save the model's architecture and weights in a pickle file
 
